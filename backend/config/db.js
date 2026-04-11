@@ -6,8 +6,8 @@ const connectDB = async () => {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB Connected");
   } catch (error) {
-    console.error(error);
-    process.exit(1);
+    console.error("MongoDB Connection Failed (Check Network / IP Whitelist):", error.message);
+    // Removed process.exit(1) so Express does not crash, preventing ERR_CONNECTION_REFUSED in React
   }
 };
 
