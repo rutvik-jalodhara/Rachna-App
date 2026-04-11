@@ -13,6 +13,7 @@ dist/
 dist-ssr/
 build/
 out/
+.vite/
 
 # Environment Variables (CRITICAL: Do not upload .env!)
 .env
