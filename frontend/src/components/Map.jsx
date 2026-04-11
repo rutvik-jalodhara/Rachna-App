@@ -94,9 +94,12 @@ function Map() {
     sales_details: "",
   });
 
+  // Global API Base URL seamlessly pointing to Live Render Server
+  const API_URL = "https://rachna-app.onrender.com";
+
   // Fetch shops
   useEffect(() => {
-    fetch("http://localhost:5000/api/shops")
+    fetch(`${API_URL}/api/shops`)
       .then((res) => res.json())
       .then((data) => {
         if (Array.isArray(data)) {
@@ -205,7 +208,7 @@ function Map() {
       longitude: selectedLocation.lng,
     };
 
-    fetch("http://localhost:5000/api/shops/add", {
+    fetch(`${API_URL}/api/shops/add`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -235,7 +238,7 @@ function Map() {
     setShops((prev) => prev.filter((shop) => shop._id !== id));
 
     try {
-      const res = await fetch(`http://localhost:5000/api/shops/${id}`, {
+      const res = await fetch(`${API_URL}/api/shops/${id}`, {
         method: "DELETE"
       });
       if (!res.ok) {
