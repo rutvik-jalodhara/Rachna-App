@@ -7,10 +7,18 @@ import {
   LayerGroup,
   ZoomControl,
 } from "react-leaflet";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import L from "leaflet";
+import AddShopModal from "./AddShopModal";
+import ScanModal from "./ScanModal";
+import ShopDetailModal from "./ShopDetailModal";
+import { useToast } from "./Toast";
+import { fetchShops, addShop, deleteShop as deleteShopApi } from "../hooks/useApi";
 
-// Move MapEvents outside to prevent component recreation and context loss inside Leaflet
+// ───────────────────────────────────────────
+// Map sub-components (outside main to avoid re-creation)
+// ───────────────────────────────────────────
+
 function MapEvents({ onLocationSelect }) {
   useMapEvents({
     click(e) {
@@ -35,13 +43,11 @@ function LocationFinder() {
   const map = useMapEvents({
     locationfound(e) {
       setPosition(e.latlng);
-      map.flyTo(e.latlng, 15); // smooth fly to the detected location
+      map.flyTo(e.latlng, 15);
     },
     locationerror(e) {
       console.error("Location error:", e.message);
-      alert(
-        "Could not get your exact device location. Ensure your system's Location privacy settings are enabled!",
-      );
+      alert("Could not get your location. Check Location permissions.");
     },
   });
 
@@ -65,11 +71,7 @@ function LocationFinder() {
         }}
         title="Show your location"
       >
-        <svg
-          focusable="false"
-          viewBox="0 0 24 24"
-          style={{ width: "24px", height: "24px", fill: "#666" }}
-        >
+        <svg focusable="false" viewBox="0 0 24 24" style={{ width: "24px", height: "24px", fill: "#666" }}>
           <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"></path>
         </svg>
       </button>
@@ -83,175 +85,172 @@ function LocationFinder() {
   );
 }
 
+// ───────────────────────────────────────────
+// Main Map Component
+// ───────────────────────────────────────────
+
 function Map() {
+  const { showToast } = useToast();
   const [shops, setShops] = useState([]);
-  const [modalOpen, setModalOpen] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
-  const [formData, setFormData] = useState({
-    shop_name: "",
-    description: "",
-    sales_details: "",
-  });
 
-  // Global API Base URL seamlessly pointing to Live Render Server
-  const API_URL = "https://rachna-app.onrender.com";
+  // Modal states
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [scanModalOpen, setScanModalOpen] = useState(false);
+  const [detailShop, setDetailShop] = useState(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
-  // Fetch shops
+  const [detectedName, setDetectedName] = useState("");
+
+  // Fetch shops on mount
   useEffect(() => {
-    fetch(`${API_URL}/api/shops`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          setShops(data);
-        } else {
-          setShops([]);
-        }
-      })
+    fetchShops()
+      .then(setShops)
       .catch((err) => {
         console.error("Error fetching shops:", err);
-        setShops([]); // Reset safely if backend is unreachable
+        setShops([]);
       });
   }, []);
 
-  const handleMapClick = async (loc) => {
+  // ── Map click handler with location detection ──
+  const handleMapClick = useCallback(async (loc) => {
     setIsLocating(true);
 
     try {
-      // 1. Cast a massive 50-meter wide net as requested to catch nearby shops or amenities!
       const radius = 50;
       const query = `[out:json][timeout:10];(nwr["shop"](around:${radius},${loc.lat},${loc.lng});nwr["amenity"](around:${radius},${loc.lat},${loc.lng});nwr["building"](around:${radius},${loc.lat},${loc.lng}););out center;`;
       const overpassRes = await fetch(
-        `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`,
+        `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`
       );
       const overpassData = await overpassRes.json();
 
-      let detectedName = "";
+      let name = "";
       let finalLoc = loc;
 
-      // If we caught locations in our 50m net, manually calculate the absolute closest one geographically
-      if (overpassData && overpassData.elements && overpassData.elements.length > 0) {
-        const namedElements = overpassData.elements.filter((el) => el.tags && el.tags.name);
-
+      if (overpassData?.elements?.length > 0) {
+        const namedElements = overpassData.elements.filter((el) => el.tags?.name);
         if (namedElements.length > 0) {
           let closestEl = null;
-          let minDistance = Infinity;
+          let minDist = Infinity;
 
           namedElements.forEach((el) => {
-            const elLat = el.lat || (el.center && el.center.lat);
-            const elLng = el.lon || (el.center && el.center.lon);
+            const elLat = el.lat || el.center?.lat;
+            const elLng = el.lon || el.center?.lon;
             if (elLat && elLng) {
-              // Calculate straightforward distance relative to tap
               const dist = Math.hypot(elLat - loc.lat, elLng - loc.lng);
-              if (dist < minDistance) {
-                minDistance = dist;
+              if (dist < minDist) {
+                minDist = dist;
                 closestEl = el;
               }
             }
           });
 
           if (closestEl) {
-            detectedName = closestEl.tags.name;
-            const cLat = closestEl.lat || closestEl.center.lat;
-            const cLng = closestEl.lon || closestEl.center.lon;
-            finalLoc = { lat: cLat, lng: cLng };
+            name = closestEl.tags.name;
+            finalLoc = {
+              lat: closestEl.lat || closestEl.center.lat,
+              lng: closestEl.lon || closestEl.center.lon,
+            };
           }
         }
       }
 
-      // 2. Fallback: If 50 meters somehow yielded nothing, just do a raw coordinate Reverse Geocode.
-      if (!detectedName) {
+      if (!name) {
         const nomRes = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${loc.lat}&lon=${loc.lng}&zoom=18&addressdetails=1`,
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${loc.lat}&lon=${loc.lng}&zoom=18&addressdetails=1`
         );
         const nomData = await nomRes.json();
-        if (nomData && nomData.name) {
-          detectedName = nomData.name;
-        } else if (nomData && nomData.address) {
-          detectedName =
-            nomData.address.shop ||
-            nomData.address.amenity ||
-            nomData.address.building ||
-            nomData.address.road ||
-            "";
+        if (nomData?.name) {
+          name = nomData.name;
+        } else if (nomData?.address) {
+          name = nomData.address.shop || nomData.address.amenity || nomData.address.building || nomData.address.road || "";
         }
       }
 
       setSelectedLocation(finalLoc);
-      setFormData((prev) => ({ ...prev, shop_name: detectedName || "" }));
+      setDetectedName(name || "");
       setIsLocating(false);
-      setModalOpen(true);
+      setAddModalOpen(true);
     } catch (err) {
-      console.error("Reverse geocoding failed", err);
+      console.error("Location detection failed:", err);
       setSelectedLocation(loc);
-      setFormData((prev) => ({ ...prev, shop_name: "" }));
+      setDetectedName("");
       setIsLocating(false);
-      setModalOpen(true);
+      setAddModalOpen(true);
     }
-  };
+  }, []);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!formData.shop_name) return;
-
-    const newShop = {
-      ...formData,
-      latitude: selectedLocation.lat,
-      longitude: selectedLocation.lng,
-    };
-
-    fetch(`${API_URL}/api/shops/add`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(newShop),
-    })
-      .then((res) => res.json())
-      .then((savedShop) => {
-        setShops((prev) => [...prev, savedShop]);
-        setModalOpen(false);
-        setFormData({ shop_name: "", description: "", sales_details: "" });
-      })
-      .catch((err) => {
-        console.error("Error adding shop:", err);
-        // Failsafe: if backend is down, temporarily add it to local state anyway
-        setShops((prev) => [...prev, { ...newShop, _id: Date.now() }]);
-        setModalOpen(false);
-        setFormData({ shop_name: "", description: "", sales_details: "" });
-      });
-  };
-
-  const handleDeleteShop = async (id, e) => {
-    e.stopPropagation();
-    if (!window.confirm("Are you sure you want to delete this mapped location?")) return;
-    
-    // Optimistically update UI immediately
-    setShops((prev) => prev.filter((shop) => shop._id !== id));
-
-    try {
-      const res = await fetch(`${API_URL}/api/shops/${id}`, {
-        method: "DELETE"
-      });
-      if (!res.ok) {
-        console.error("Failed to delete shop on server");
+  // ── Add shop handler ──
+  const handleAddShop = useCallback(
+    async (shopData, imageFile, onProgress) => {
+      try {
+        const savedShop = await addShop(shopData, imageFile, onProgress);
+        setShops((prev) => [savedShop, ...prev]);
+        setAddModalOpen(false);
+        showToast(
+          imageFile
+            ? `"${savedShop.shop_name}" saved with AI embeddings!`
+            : `"${savedShop.shop_name}" saved!`,
+          "success"
+        );
+      } catch (err) {
+        const msg = err.response?.data?.error || err.message;
+        if (err.response?.status === 409) {
+          showToast("This shop already exists at this location", "warning");
+        } else {
+          showToast(msg || "Failed to save shop", "error");
+        }
+        throw err; // Re-throw so modal stays open
       }
-    } catch (err) {
-      console.error("Error deleting shop:", err);
-    }
-  };
+    },
+    [showToast]
+  );
 
-  // Create custom icon
-  const createCustomIcon = (shopName) => {
-    const initial = shopName && shopName.length > 0 ? shopName.charAt(0).toUpperCase() : "?";
+  // ── Delete shop handler ──
+  const handleDeleteShop = useCallback(
+    async (id) => {
+      setShops((prev) => prev.filter((s) => s._id !== id));
+      try {
+        await deleteShopApi(id);
+        showToast("Shop deleted", "info");
+      } catch (err) {
+        console.error("Delete error:", err);
+        showToast("Failed to delete on server", "error");
+      }
+    },
+    [showToast]
+  );
+
+  // ── Scan match handler ──
+  const handleMatchFound = useCallback((shop) => {
+    setDetailShop(shop);
+    setDetailModalOpen(true);
+  }, []);
+
+  // ── Shop popup click → detail ──
+  const handleShopClick = useCallback((shop) => {
+    setDetailShop(shop);
+    setDetailModalOpen(true);
+  }, []);
+
+  // ── Create marker icons ──
+  const createCustomIcon = useCallback((shop) => {
+    if (shop.image_url) {
+      // Image-based marker
+      return L.divIcon({
+        className: "custom-marker",
+        html: `
+          <div class="marker-pin marker-pin-img">
+            <img src="${shop.image_url}" alt="" class="marker-thumb" />
+          </div>
+        `,
+        iconSize: [42, 42],
+        iconAnchor: [21, 42],
+        popupAnchor: [0, -42],
+      });
+    }
+    const initial = shop.shop_name?.charAt(0)?.toUpperCase() || "?";
     return L.divIcon({
       className: "custom-marker",
       html: `<div class="marker-pin"><span class="marker-initial">${initial}</span></div>`,
@@ -259,46 +258,48 @@ function Map() {
       iconAnchor: [18, 36],
       popupAnchor: [0, -36],
     });
-  };
+  }, []);
 
-  // Extract valid shops to guarantee no 'null' children are passed to react-leaflet Container
-  const validShops = Array.isArray(shops)
-    ? shops.filter(
-        (shop) => shop && typeof shop.latitude === "number" && typeof shop.longitude === "number",
-      )
-    : [];
+  // Filter valid shops
+  const validShops = (Array.isArray(shops) ? shops : []).filter(
+    (s) => s && typeof s.latitude === "number" && typeof s.longitude === "number"
+  );
 
   return (
     <div style={{ position: "relative", width: "100%", height: "calc(100vh - 65px)" }}>
-      {/* Google Maps Floating Search Bar Overlay */}
+      {/* Search Bar */}
       <div className="google-search-bar" style={{ position: "absolute", zIndex: 1000 }}>
-        <svg
-          style={{ width: "24px", height: "24px", fill: "#5f6368" }}
-          focusable="false"
-          viewBox="0 0 24 24"
-        >
+        <svg style={{ width: "24px", height: "24px", fill: "#5f6368" }} focusable="false" viewBox="0 0 24 24">
           <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path>
         </svg>
         <input type="text" placeholder="Search Rachna Map App" />
       </div>
 
+      {/* ✨ SCAN FAB BUTTON ✨ */}
+      <button
+        className="scan-fab"
+        onClick={() => setScanModalOpen(true)}
+        title="Scan a shop"
+      >
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor">
+          <path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5zm-6 8h1.5v1.5H13V13zm1.5 1.5H16V16h-1.5v-1.5zM16 13h1.5v1.5H16V13zm-3 3h1.5v1.5H13V16zm1.5 1.5H16V19h-1.5v-1.5zM16 16h1.5v1.5H16V16zm1.5-1.5H19V16h-1.5v-1.5zm0 3H19V19h-1.5v-1.5zM22 7h-2V4h-3V2h5v5zm0 15v-5h-2v3h-3v2h5zM2 22h5v-2H4v-3H2v5zM2 2v5h2V4h3V2H2z" />
+        </svg>
+        <span className="scan-fab-label">Scan</span>
+      </button>
+
+      {/* Leaflet Map */}
       <MapContainer
         center={[23.0225, 72.5714]}
         zoom={13}
         zoomControl={false}
         style={{ height: "100%", width: "100%", zIndex: 1 }}
       >
-        {/* Google Maps Clean Minimalist Style is omitted. Rendering user-selected Map Tiles */}
         <TileLayer
           attribution="&copy; Google Maps"
           url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
         />
-
-        {/* Bottom Right Zoom Overlays matching Google */}
         <ZoomControl position="bottomright" />
-
         <MapEvents onLocationSelect={handleMapClick} />
-
         <LocationFinder />
 
         <LayerGroup>
@@ -306,19 +307,41 @@ function Map() {
             <Marker
               key={shop._id || index}
               position={[shop.latitude, shop.longitude]}
-              icon={createCustomIcon(shop.shop_name)}
+              icon={createCustomIcon(shop)}
             >
               <Popup>
-                <div style={{ fontFamily: "Inter" }}>
-                  <h4 style={{ margin: "0 0 5px 0", color: "#2d3436" }}>{shop.shop_name || "Unknown Shop"}</h4>
-                  {shop.description ? <p style={{ margin: "0 0 5px 0", fontSize: "13px" }}>{shop.description}</p> : null}
-                  {shop.sales_details ? <p className="sales" style={{ margin: "0 0 5px 0", fontSize: "13px", fontWeight: "bold" }}>Sales: {shop.sales_details}</p> : null}
-                  <button 
-                    style={{ marginTop: '10px', width: '100%', background: '#ff4757', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: '500' }}
-                    onClick={(e) => handleDeleteShop(shop._id, e)}
-                  >
-                    Remove Location
-                  </button>
+                <div className="shop-popup">
+                  {shop.image_url && (
+                    <img src={shop.image_url} alt={shop.shop_name} className="popup-shop-img" />
+                  )}
+                  <h4>{shop.shop_name || "Unknown Shop"}</h4>
+                  {shop.category && shop.category !== "General" && (
+                    <span className="category-badge category-badge-sm">{shop.category}</span>
+                  )}
+                  {shop.description && <p className="popup-desc">{shop.description}</p>}
+                  {shop.sales_details && <p className="sales">Sales: {shop.sales_details}</p>}
+                  <div className="popup-actions">
+                    <button
+                      className="popup-btn popup-btn-view"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleShopClick(shop);
+                      }}
+                    >
+                      View Details
+                    </button>
+                    <button
+                      className="popup-btn popup-btn-delete"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm("Delete this shop?")) {
+                          handleDeleteShop(shop._id);
+                        }
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </Popup>
             </Marker>
@@ -326,78 +349,45 @@ function Map() {
         </LayerGroup>
       </MapContainer>
 
+      {/* Loading Overlay */}
       {isLocating && (
         <div className="loader-overlay">
           <div className="spinner"></div>
-          <div className="loader-text">Pinpointing Location...</div>
+          <div className="loader-text">Detecting Location...</div>
         </div>
       )}
 
-      {modalOpen ? (
-        <div className="modal-overlay" onClick={() => setModalOpen(false)}>
-          <div className="glass-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>
-              {formData.shop_name === "Detecting location..."
-                ? "Detecting location..."
-                : formData.shop_name
-                  ? `Details for ${formData.shop_name}`
-                  : "Mark New Location"}
-            </h3>
-            <form onSubmit={handleSubmit}>
-              <div className="input-group">
-                <label>Shop Name *</label>
-                <input
-                  type="text"
-                  name="shop_name"
-                  value={formData.shop_name}
-                  onChange={handleInputChange}
-                  required
-                  placeholder="E.g., Rachna Store"
-                />
-              </div>
+      {/* Add Shop Modal */}
+      <AddShopModal
+        isOpen={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        onSubmit={handleAddShop}
+        initialName={detectedName}
+        location={selectedLocation}
+      />
 
-              <div className="input-group">
-                <label>Description</label>
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  placeholder="What does this shop about?"
-                  rows="2"
-                />
-              </div>
+      {/* Scan Modal */}
+      <ScanModal
+        isOpen={scanModalOpen}
+        onClose={() => setScanModalOpen(false)}
+        onMatchFound={handleMatchFound}
+      />
 
-              <div className="input-group">
-                <label>Sales Details</label>
-                <input
-                  type="text"
-                  name="sales_details"
-                  value={formData.sales_details}
-                  onChange={handleInputChange}
-                  placeholder="E.g., ₹50,000/month"
-                />
-              </div>
-
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn btn-cancel"
-                  onClick={() => setModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-submit">
-                  Save Shop
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
+      {/* Shop Detail Modal */}
+      <ShopDetailModal
+        shop={detailShop}
+        isOpen={detailModalOpen}
+        onClose={() => {
+          setDetailModalOpen(false);
+          setDetailShop(null);
+        }}
+        onDelete={handleDeleteShop}
+      />
     </div>
   );
 }
 
+// Error Boundary
 class MapErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -413,15 +403,7 @@ class MapErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div
-          style={{
-            padding: "20px",
-            color: "red",
-            backgroundColor: "white",
-            zIndex: 9999,
-            position: "relative",
-          }}
-        >
+        <div style={{ padding: "20px", color: "red", backgroundColor: "white", zIndex: 9999, position: "relative" }}>
           <h2>Map Component Crashed</h2>
           <p>{this.state.error && this.state.error.toString()}</p>
           <pre>{this.state.errorInfo && this.state.errorInfo.componentStack}</pre>

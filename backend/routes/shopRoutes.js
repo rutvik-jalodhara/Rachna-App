@@ -1,37 +1,27 @@
 const express = require("express");
 const router = express.Router();
-const Shop = require("../models/Shop");
+const upload = require("../middleware/upload");
+const {
+  addShop,
+  getShops,
+  getShopById,
+  deleteShop,
+  scanShop,
+} = require("../controllers/shopController");
 
-// Add shop
-router.post("/add", async (req, res) => {
-  try {
-    const shop = new Shop(req.body);
-    await shop.save();
-    res.json(shop);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// Add shop (with optional image upload)
+router.post("/add", upload.single("image"), addShop);
 
-// Get shops
-router.get("/", async (req, res) => {
-  try {
-    const shops = await Shop.find();
-    res.json(shops);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// Get all shops
+router.get("/", getShops);
+
+// Get single shop by ID
+router.get("/:id", getShopById);
 
 // Delete shop
-router.delete("/:id", async (req, res) => {
-  try {
-    const shop = await Shop.findByIdAndDelete(req.params.id);
-    if (!shop) return res.status(404).json({ error: "Shop not found" });
-    res.json({ message: "Shop deleted successfully" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+router.delete("/:id", deleteShop);
+
+// Scan shop image (AI matching)
+router.post("/scan", upload.single("image"), scanShop);
 
 module.exports = router;
