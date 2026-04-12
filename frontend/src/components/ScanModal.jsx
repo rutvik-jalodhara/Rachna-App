@@ -95,7 +95,7 @@ export default function ScanModal({ isOpen, onClose, onMatchFound }) {
   return (
     <div className="scan-overlay">
       {/* Header */}
-      <div className="scan-header">
+      <div className="scan-header scan-header--safe">
         <button className="scan-close-btn" onClick={handleClose}>
           <svg viewBox="0 0 24 24" width="28" height="28" fill="white">
             <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
@@ -110,8 +110,8 @@ export default function ScanModal({ isOpen, onClose, onMatchFound }) {
         <div style={{ width: 28 }} /> {/* Spacer for centering */}
       </div>
 
-      {/* Content Area */}
-      <div className="scan-content">
+      {/* Content Area — scrollable on small viewports / long results */}
+      <div className="scan-content scan-content--scroll">
         {/* ── IDLE: Show capture buttons ── */}
         {stage === "idle" && (
           <div className="scan-idle">
@@ -199,7 +199,13 @@ export default function ScanModal({ isOpen, onClose, onMatchFound }) {
             ) : scanResult?.match ? (
               /* Match found */
               <div className="scan-match-card">
-                <div className="match-confidence-badge match-confidence-${scanResult.confidence}">
+                <div
+                  className={`match-confidence-badge ${
+                    scanResult.confidence === "high"
+                      ? "match-confidence-high"
+                      : "match-confidence-medium"
+                  }`}
+                >
                   {scanResult.confidence === "high" ? "🎯 Strong Match" : "🔍 Possible Match"}
                 </div>
 

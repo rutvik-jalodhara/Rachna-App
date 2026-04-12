@@ -266,7 +266,7 @@ function Map() {
   );
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "calc(100vh - 65px)" }}>
+    <div className="map-root">
       {/* Search Bar */}
       <div className="google-search-bar" style={{ position: "absolute", zIndex: 1000 }}>
         <svg style={{ width: "24px", height: "24px", fill: "#5f6368" }} focusable="false" viewBox="0 0 24 24">
@@ -294,6 +294,7 @@ function Map() {
         zoomControl={false}
         style={{ height: "100%", width: "100%", zIndex: 1 }}
       >
+        {/* Google Maps Clean Minimalist Style is omitted. Rendering user-selected Map Tiles */}
         <TileLayer
           attribution="&copy; Google Maps"
           url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"

@@ -115,8 +115,8 @@ export default function AddShopModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="glass-modal add-shop-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="modal-header">
+        {/* Header stays visible; form scrolls on small screens */}
+        <div className="modal-header modal-header--sticky">
           <h3>
             {formData.shop_name
               ? `Add "${formData.shop_name}"`
@@ -127,7 +127,7 @@ export default function AddShopModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form className="modal-scroll modal-scroll--form" onSubmit={handleSubmit}>
           {/* Image Upload Section */}
           <div className="image-upload-section">
             <label className="section-label">Shop Photo</label>

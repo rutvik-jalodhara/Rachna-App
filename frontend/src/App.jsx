@@ -5,15 +5,15 @@ import { ToastProvider } from "./components/Toast";
 function App() {
   return (
     <ToastProvider>
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
+      <div className="app-shell">
         <header className="app-header">
           <img src="/resources/favicon.png" alt="Logo" className="app-logo" />
           <h2 className="app-title">Rachna Map App</h2>
           <span className="app-badge">AI</span>
         </header>
-        <div style={{ flex: 1 }}>
+        <main className="app-main">
           <Map />
-        </div>
+        </main>
       </div>
     </ToastProvider>
   );
