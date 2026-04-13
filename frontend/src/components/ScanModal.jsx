@@ -93,7 +93,7 @@ export default function ScanModal({ isOpen, onClose, onMatchFound }) {
   if (!isOpen) return null;
 
   return (
-    <div className="scan-overlay">
+    <div className="modal modal--fullscreen scan-modal" role="dialog" aria-modal="true" aria-label="Scan shop">
       {/* Header */}
       <div className="scan-header scan-header--safe">
         <button className="scan-close-btn" onClick={handleClose}>
@@ -111,7 +111,7 @@ export default function ScanModal({ isOpen, onClose, onMatchFound }) {
       </div>
 
       {/* Content Area — scrollable on small viewports / long results */}
-      <div className="scan-content scan-content--scroll">
+      <div className="modal-content scan-content scan-content--scroll">
         {/* ── IDLE: Show capture buttons ── */}
         {stage === "idle" && (
           <div className="scan-idle">

@@ -113,8 +113,8 @@ export default function AddShopModal({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="glass-modal add-shop-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal modal--backdrop" onClick={onClose}>
+      <div className="modal__sheet glass-modal add-shop-modal" onClick={(e) => e.stopPropagation()}>
         {/* Header stays visible; form scrolls on small screens */}
         <div className="modal-header modal-header--sticky">
           <h3>
@@ -127,7 +127,7 @@ export default function AddShopModal({
           </button>
         </div>
 
-        <form className="modal-scroll modal-scroll--form" onSubmit={handleSubmit}>
+        <form className="modal-content modal-content--form" onSubmit={handleSubmit}>
           {/* Image Upload Section */}
           <div className="image-upload-section">
             <label className="section-label">Shop Photo</label>

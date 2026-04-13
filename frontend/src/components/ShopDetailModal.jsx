@@ -22,9 +22,9 @@ export default function ShopDetailModal({ shop, isOpen, onClose, onDelete }) {
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="glass-modal detail-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-scroll modal-scroll--detail">
+    <div className="modal modal--backdrop" onClick={onClose}>
+      <div className="modal__sheet glass-modal detail-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-content modal-content--detail">
           {/* Hero Image */}
           <div className="detail-hero">
             {shop.image_url ? (

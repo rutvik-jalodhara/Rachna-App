@@ -4,7 +4,7 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
-/* ─── CSS Variables ─── */
+/* ─── Design tokens ─── */
 :root {
   --primary: #6c5ce7;
   --primary-light: #a29bfe;
@@ -24,15 +24,34 @@
   --radius: 16px;
   --radius-sm: 8px;
   --radius-xs: 6px;
+
+  /* Spacing scale (rem — scales with user font size) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+
   --app-header-height: 65px;
   --modal-scroll-pad-bottom: 80px;
-  /* Dynamic viewport avoids iOS 100vh clipping under URL bar; fallback is 100vh */
+  --modal-sheet-max-w: 27.5rem;
+
+  /* Dynamic viewport: 100vh fallback, 100dvh when supported (mobile browser chrome) */
   --app-viewport-height: 100vh;
-  /* Bottom inset for FAB / Leaflet: safe area + minimum thumb clearance */
-  --map-ui-bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 8px));
-  /* Default Leaflet zoom control is two ~34px tiles + borders (~76px) */
+
+  /* Stacking */
+  --z-map-ui: 1000;
+  --z-modal: 2000;
+  --z-modal-fullscreen: 3000;
+  --z-toast: 9999;
+
+  /* Map chrome: body already pads safe-area-bottom — gutter from map inner edge */
+  --map-ui-bottom: var(--space-4);
   --map-zoom-stack-height: 76px;
-  --map-locate-above-zoom-gap: 12px;
+  --map-locate-above-zoom-gap: var(--space-3);
 }
 
 @supports (height: 100dvh) {
@@ -41,15 +60,20 @@
   }
 }
 
-/* ─── Base ─── */
+/* ─── Global reset & touch scrolling ─── */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
+* {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ─── Viewport shell (ONLY html / body / #root use viewport height) ─── */
 html {
-  height: 100%;
+  height: 100vh;
   height: var(--app-viewport-height);
   max-height: var(--app-viewport-height);
   width: 100%;
@@ -57,7 +81,6 @@ html {
   -webkit-text-size-adjust: 100%;
 }
 
-/* iOS Safari: when dvh is unavailable, fill-available avoids under-chrome overflow */
 @supports (-webkit-touch-callout: none) {
   html {
     min-height: -webkit-fill-available;
@@ -67,15 +90,13 @@ html {
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   margin: 0;
-  padding: 0;
-  height: 100%;
-  min-height: 100%;
-  min-height: var(--app-viewport-height);
+  height: 100vh;
+  height: var(--app-viewport-height);
   max-height: var(--app-viewport-height);
   width: 100%;
   overflow-x: hidden;
   overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   background-color: var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -85,9 +106,11 @@ body {
 }
 
 #root {
-  height: 100%;
+  height: 100vh;
+  height: var(--app-viewport-height);
   max-height: var(--app-viewport-height);
   width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
@@ -146,10 +169,10 @@ img {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding-left: max(12px, env(safe-area-inset-left));
-  padding-right: max(12px, env(safe-area-inset-right));
-  padding-top: env(safe-area-inset-top);
+  gap: var(--space-3);
+  padding-left: max(var(--space-3), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--space-3), env(safe-area-inset-right, 0px));
+  padding-top: env(safe-area-inset-top, 0px);
   background: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   z-index: 10;
@@ -244,34 +267,60 @@ img {
 }
 
 /* ════════════════════════════════════════════
-   MODAL OVERLAY + GLASS CARD
+   MODAL SYSTEM (shell + scrollable content)
    ════════════════════════════════════════════ */
 
-.modal-overlay {
+.modal {
   position: fixed;
   inset: 0;
-  top: 0;
-  left: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
   width: 100%;
-  height: 100%;
+  height: 100vh;
+  height: var(--app-viewport-height);
   min-height: var(--app-viewport-height);
   max-height: var(--app-viewport-height);
+  overflow: hidden;
+  box-sizing: border-box;
+  animation: fadeIn 0.25s ease;
+}
+
+.modal--backdrop {
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(6px);
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  z-index: 2000;
-  animation: fadeIn 0.25s ease;
-  padding: 0;
-  box-sizing: border-box;
-  overflow: hidden;
+  -webkit-backdrop-filter: blur(6px);
 }
 
 @media (min-width: 600px) {
-  .modal-overlay {
-    align-items: center;
+  .modal:not(.modal--fullscreen) {
+    justify-content: center;
   }
+}
+
+/* Full-screen modal (scan) — same shell, different stacking & theme */
+.modal--fullscreen {
+  z-index: var(--z-modal-fullscreen);
+  justify-content: flex-start;
+  align-items: stretch;
+  background: #0a0a1a;
+}
+
+.modal--fullscreen.modal--backdrop {
+  background: #0a0a1a;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* Sheet panel (glass card) — flex column so .modal-content can scroll */
+.modal__sheet {
+  width: 100%;
+  max-width: min(var(--modal-sheet-max-w), 100%);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .glass-modal {
@@ -281,15 +330,15 @@ img {
   border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
   border-radius: var(--radius) var(--radius) 0 0;
-  padding: 1.5rem;
+  padding: var(--space-6);
   width: 100%;
-  max-width: min(440px, 100%);
+  max-width: min(var(--modal-sheet-max-w), 100%);
   max-height: min(90vh, 100%);
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
   animation: slideUp 0.3s ease;
 }
 
@@ -299,29 +348,46 @@ img {
   }
 }
 
+/* Primary scroll region inside modals (+ legacy .modal-scroll alias) */
+.modal-content,
 .modal-scroll {
   flex: 1;
   min-height: 0;
   min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding-bottom: calc(var(--modal-scroll-pad-bottom) + env(safe-area-inset-bottom));
+}
+
+.modal-content--padded-bottom {
+  padding-bottom: calc(var(--modal-scroll-pad-bottom) + env(safe-area-inset-bottom, 0px));
+}
+
+.modal-content--form {
+  padding-top: var(--space-1);
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+}
+
+.modal-content--detail {
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+}
+
+.modal-scroll {
+  padding-bottom: calc(var(--modal-scroll-pad-bottom) + env(safe-area-inset-bottom, 0px));
 }
 
 .modal-scroll--form {
-  padding-top: 0.25rem;
-  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  padding-top: var(--space-1);
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
 }
 
 .modal-scroll--detail {
-  padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
 }
 
 .modal-header--sticky {
   flex-shrink: 0;
-  padding: 1.25rem 1.25rem 0.75rem;
+  padding: var(--space-5) var(--space-5) var(--space-3);
   margin: 0;
   background: var(--glass);
   border-radius: inherit;
@@ -332,16 +398,17 @@ img {
   gap: 0;
 }
 
+.add-shop-modal .modal-content--form,
 .add-shop-modal .modal-scroll--form {
   width: 100%;
   max-width: 100%;
-  padding-left: 1.25rem;
-  padding-right: 1.25rem;
-  padding-bottom: calc(var(--modal-scroll-pad-bottom) + env(safe-area-inset-bottom));
+  padding-left: var(--space-5);
+  padding-right: var(--space-5);
+  padding-bottom: calc(var(--modal-scroll-pad-bottom) + env(safe-area-inset-bottom, 0px));
 }
 
 .add-shop-modal .modal-header--sticky {
-  padding-top: max(1.25rem, env(safe-area-inset-top));
+  padding-top: max(var(--space-5), env(safe-area-inset-top, 0px));
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 
@@ -639,25 +706,11 @@ img {
 }
 
 /* ════════════════════════════════════════════
-   SCAN MODAL (FULL-SCREEN EXPERIENCE)
+   SCAN MODAL (full-screen — uses .modal.modal--fullscreen)
    ════════════════════════════════════════════ */
 
-.scan-overlay {
-  position: fixed;
-  inset: 0;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  min-height: var(--app-viewport-height);
-  max-height: var(--app-viewport-height);
-  background: #0a0a1a;
-  z-index: 3000;
-  display: flex;
-  flex-direction: column;
+.scan-modal.modal.modal--fullscreen {
   animation: fadeIn 0.3s ease;
-  box-sizing: border-box;
-  overflow: hidden;
 }
 
 .scan-header {
@@ -701,9 +754,9 @@ img {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 20px;
-  padding-left: max(20px, env(safe-area-inset-left));
-  padding-right: max(20px, env(safe-area-inset-right));
+  padding: var(--space-5);
+  padding-left: max(var(--space-5), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--space-5), env(safe-area-inset-right, 0px));
   min-height: 0;
   min-width: 0;
   width: 100%;
@@ -713,9 +766,8 @@ img {
 .scan-content--scroll {
   overflow-y: auto;
   overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
-  padding-bottom: calc(var(--modal-scroll-pad-bottom) + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--modal-scroll-pad-bottom) + env(safe-area-inset-bottom, 0px));
 }
 
 /* Center short states; when content is taller than the viewport, scroll takes over */
@@ -1160,8 +1212,8 @@ img {
 .scan-fab {
   position: absolute;
   bottom: var(--map-ui-bottom);
-  left: max(16px, env(safe-area-inset-left, 0px));
-  z-index: 1000;
+  left: max(var(--space-4), env(safe-area-inset-left, 0px));
+  z-index: var(--z-map-ui);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1203,6 +1255,7 @@ img {
   max-height: min(94vh, 100%);
 }
 
+.detail-modal .modal-content,
 .detail-modal .modal-scroll {
   flex: 1;
   min-height: 0;
@@ -1518,9 +1571,9 @@ img {
 
 .google-search-bar {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  z-index: 1000;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: var(--z-map-ui);
   background: white;
   padding: 10px 16px;
   border-radius: var(--radius-sm);
@@ -1555,8 +1608,8 @@ img {
   bottom: calc(
     var(--map-ui-bottom) + var(--map-zoom-stack-height) + var(--map-locate-above-zoom-gap)
   );
-  right: max(10px, env(safe-area-inset-right, 0px));
-  z-index: 1000;
+  right: max(var(--space-2), env(safe-area-inset-right, 0px));
+  z-index: var(--z-map-ui);
   background: white;
   width: 40px;
   height: 40px;
@@ -1643,9 +1696,9 @@ img {
 
 .toast-container {
   position: fixed;
-  top: max(16px, env(safe-area-inset-top));
-  right: max(16px, env(safe-area-inset-right));
-  z-index: 9999;
+  top: max(var(--space-4), env(safe-area-inset-top, 0px));
+  right: max(var(--space-4), env(safe-area-inset-right, 0px));
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   gap: 8px;
