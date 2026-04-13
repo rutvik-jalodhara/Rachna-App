@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { haversineMeters } from "../utils/geoDistance";
+import { MAP_CONFIG } from "../config/mapConfig";
 
-const WATCH_OPTIONS = {
-  enableHighAccuracy: false,
-  maximumAge: 8_000,
-  timeout: 20_000,
-};
-
-/** Min movement (m) or time (ms) before updating React state — reduces re-renders while staying responsive */
-const MIN_MOVE_M = 10;
-const MIN_INTERVAL_MS = 3_500;
+function watchOptions(overrides = {}) {
+  return {
+    enableHighAccuracy: MAP_CONFIG.USER_LOCATION_ENABLE_HIGH_ACCURACY,
+    maximumAge: MAP_CONFIG.USER_LOCATION_MAXIMUM_AGE_MS,
+    timeout: MAP_CONFIG.USER_LOCATION_TIMEOUT_MS,
+    ...overrides,
+  };
+}
 
 /**
  * Live location via watchPosition + throttled updates for smooth distance UX.
@@ -30,7 +30,7 @@ export function useUserLocation() {
     if (prev) {
       const moved = haversineMeters(prev.lat, prev.lng, lat, lng);
       const elapsed = now - lastEmitTimeRef.current;
-      if (moved < MIN_MOVE_M && elapsed < MIN_INTERVAL_MS) {
+      if (moved < MAP_CONFIG.USER_LOCATION_MIN_MOVE_M && elapsed < MAP_CONFIG.USER_LOCATION_MIN_INTERVAL_MS) {
         return;
       }
     }
@@ -73,7 +73,7 @@ export function useUserLocation() {
           setErrorMessage(err.message || "Could not read your location.");
         }
       },
-      WATCH_OPTIONS
+      watchOptions()
     );
 
     return () => {
@@ -117,7 +117,7 @@ export function useUserLocation() {
           setErrorMessage(err.message || "Could not read your location.");
         }
       },
-      { ...WATCH_OPTIONS, maximumAge: 0 }
+      watchOptions({ maximumAge: 0 })
     );
   }, []);
 

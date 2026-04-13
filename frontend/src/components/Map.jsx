@@ -21,6 +21,7 @@ import { fetchShops, addShop, deleteShop as deleteShopApi } from "../hooks/useAp
 import { quickReverseLabel, resolvePlaceAtLocation, resolveMapTapLabel } from "../utils/geocoding";
 import { haversineMeters, formatDistance, formatApproxDriveEta, googleMapsDirectionsUrl } from "../utils/geoDistance";
 import { useUserLocation } from "../hooks/useUserLocation";
+import { MAP_CONFIG } from "../config/mapConfig";
 
 const liveUserIcon = L.divIcon({
   className: "user-location-marker",
@@ -52,9 +53,6 @@ function LiveUserMarker({ userCoords, onUserMarkerTap }) {
 // Center / locate controls (uses live userCoords when available)
 // ───────────────────────────────────────────
 
-/** If GPS fix is older than this, prefer map.locate() to refresh instead of flying to stale coords. */
-const LOCATE_STALE_MS = 120_000;
-
 function LocationControls({ userCoords, lastFixAt }) {
   const locateRef = useRef(null);
 
@@ -71,7 +69,7 @@ function LocationControls({ userCoords, lastFixAt }) {
 
   const flyToUser = useCallback(() => {
     const hasCoords = userCoords && Number.isFinite(userCoords.lat) && Number.isFinite(userCoords.lng);
-    const fresh = lastFixAt != null && Date.now() - lastFixAt < LOCATE_STALE_MS;
+    const fresh = lastFixAt != null && Date.now() - lastFixAt < MAP_CONFIG.LOCATION_STALE_MS;
     if (hasCoords && fresh) {
       map.flyTo([userCoords.lat, userCoords.lng], Math.max(map.getZoom(), 15), { duration: 0.55 });
       return;

@@ -2,6 +2,7 @@
  * Nominatim + local helpers for map search.
  * Per https://operations.osmfoundation.org/policies/nominatim/ — identify app in requests.
  */
+import { MAP_CONFIG, buildOverpassAroundQuery } from "../config/mapConfig";
 import { haversineMeters } from "./geoDistance";
 
 const NOMINATIM = "https://nominatim.openstreetmap.org";
@@ -109,11 +110,11 @@ export async function quickReverseLabel(lat, lng, { signal } = {}) {
 }
 
 /**
- * Named POI from Overpass within ~radiusM (shop / amenity / tourism / historic / building).
+ * Named POI from Overpass within ~radiusM (see MAP_CONFIG.OVERPASS_TAGS).
  */
-export async function nearbyNamedPoi(lat, lng, { signal, radiusM = 50 } = {}) {
-  const r = Math.max(20, Math.min(100, Math.round(radiusM)));
-  const query = `[out:json][timeout:12];(nwr["shop"](around:${r},${lat},${lng});nwr["amenity"](around:${r},${lat},${lng});nwr["tourism"](around:${r},${lat},${lng});nwr["historic"](around:${r},${lat},${lng});nwr["building"](around:${r},${lat},${lng}););out center;`;
+export async function nearbyNamedPoi(lat, lng, { signal, radiusM = MAP_CONFIG.POI_RADIUS_METERS } = {}) {
+  const query = buildOverpassAroundQuery(lat, lng, radiusM, MAP_CONFIG.OVERPASS_TAGS, MAP_CONFIG.OVERPASS_TIMEOUT_SEC);
+  const maxAcceptM = radiusM + MAP_CONFIG.POI_PREFER_DISTANCE_METERS;
   try {
     const overpassRes = await fetch(
       `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`,
@@ -131,7 +132,7 @@ export async function nearbyNamedPoi(lat, lng, { signal, radiusM = 50 } = {}) {
       const elLng = el.lon ?? el.center?.lon;
       if (elLat == null || elLng == null) continue;
       const d = haversineMeters(lat, lng, elLat, elLng);
-      if (d < bestD && d <= radiusM + 25) {
+      if (d < bestD && d <= maxAcceptM) {
         bestD = d;
         best = { name: el.tags.name, lat: elLat, lng: elLng };
       }
@@ -147,7 +148,7 @@ export async function nearbyNamedPoi(lat, lng, { signal, radiusM = 50 } = {}) {
  */
 export async function resolveMapTapLabel(lat, lng, { signal } = {}) {
   const [poi, rev] = await Promise.all([
-    nearbyNamedPoi(lat, lng, { signal, radiusM: 52 }).catch(() => null),
+    nearbyNamedPoi(lat, lng, { signal, radiusM: MAP_CONFIG.POI_RADIUS_METERS }).catch(() => null),
     nominatimReverse(lat, lng, { signal }).catch(() => null),
   ]);
   if (poi?.name) {
@@ -237,8 +238,14 @@ export async function resolvePlaceAtLocation(lat, lng, { signal } = {}) {
   let finalLoc = { lat, lng };
 
   try {
-    const radius = 50;
-    const query = `[out:json][timeout:10];(nwr["shop"](around:${radius},${lat},${lng});nwr["amenity"](around:${radius},${lat},${lng});nwr["building"](around:${radius},${lat},${lng}););out center;`;
+    const radius = MAP_CONFIG.RESOLVE_PLACE_RADIUS_METERS;
+    const query = buildOverpassAroundQuery(
+      lat,
+      lng,
+      radius,
+      MAP_CONFIG.RESOLVE_PLACE_OVERPASS_TAGS,
+      MAP_CONFIG.RESOLVE_PLACE_OVERPASS_TIMEOUT_SEC
+    );
     const overpassRes = await fetch(
       `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`,
       { signal }

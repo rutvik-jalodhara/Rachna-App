@@ -1,9 +1,6 @@
 import { useMap } from "react-leaflet";
 import { useEffect, useRef } from "react";
-
-const LONG_PRESS_MS = 620;
-/** Cancel long-press only if finger moves beyond this (slight jitter tolerance). */
-const MOVE_PX = 28;
+import { MAP_CONFIG } from "../config/mapConfig";
 
 function isOverMarkerOrPopup(target) {
   if (!target || !target.closest) return false;
@@ -65,16 +62,16 @@ export default function MapInteractionLayer({ onTapMap, onLongPressMap }) {
         timerRef.current = null;
         const { latlng } = startRef.current;
         if (!latlng) return;
-        suppressClickUntilRef.current = Date.now() + 450;
+        suppressClickUntilRef.current = Date.now() + MAP_CONFIG.LONG_PRESS_SUPPRESS_CLICK_MS;
         onLongPressMap?.(latlng);
-      }, LONG_PRESS_MS);
+      }, MAP_CONFIG.LONG_PRESS_DURATION_MS);
     };
 
     const onPointerMove = (ev) => {
       if (!timerRef.current) return;
       const dx = ev.clientX - startRef.current.x;
       const dy = ev.clientY - startRef.current.y;
-      if (Math.hypot(dx, dy) > MOVE_PX) clearTimer();
+      if (Math.hypot(dx, dy) > MAP_CONFIG.LONG_PRESS_MOVE_PX) clearTimer();
     };
 
     const onPointerEnd = () => {
