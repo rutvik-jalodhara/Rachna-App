@@ -44,3 +44,20 @@ export function googleMapsDirectionsUrl(lat, lng, { driving = false } = {}) {
   if (driving) url += "&travelmode=driving";
   return url;
 }
+
+/** ~28 km/h blended urban driving — rough ETA for UI only (not routing). */
+const ASSUMED_URBAN_KMH = 28;
+
+/**
+ * @param {number} meters
+ * @returns {string|null} e.g. "~4 min" or "~1 h 5 min"
+ */
+export function formatApproxDriveEta(meters) {
+  if (meters == null || !Number.isFinite(meters) || meters <= 0) return null;
+  const hours = meters / 1000 / ASSUMED_URBAN_KMH;
+  const minutes = Math.max(1, Math.round(hours * 60));
+  if (minutes < 60) return `~${minutes} min drive`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `~${h} h ${m} min drive` : `~${h} h drive`;
+}

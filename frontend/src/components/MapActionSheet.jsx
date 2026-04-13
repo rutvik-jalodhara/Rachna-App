@@ -8,6 +8,7 @@ export default function MapActionSheet({
   title,
   subtitle,
   distanceLabel,
+  etaLabel,
   isShop,
   onClose,
   onViewShop,
@@ -36,6 +37,7 @@ export default function MapActionSheet({
             {title || "Selected location"}
           </h2>
           {distanceLabel && <p className="map-action-sheet__distance">{distanceLabel}</p>}
+          {etaLabel && <p className="map-action-sheet__eta">{etaLabel}</p>}
           {subtitle && <p className="map-action-sheet__subtitle">{subtitle}</p>}
           <div className="map-action-sheet__actions">
             <div className="map-action-sheet__nav-row">

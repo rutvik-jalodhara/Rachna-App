@@ -4,6 +4,7 @@ import {
   Marker,
   LayerGroup,
   ZoomControl,
+  useMap,
   useMapEvents,
 } from "react-leaflet";
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
@@ -18,61 +19,92 @@ import MapFlyTo from "./MapFlyTo";
 import { useToast } from "./Toast";
 import { fetchShops, addShop, deleteShop as deleteShopApi } from "../hooks/useApi";
 import { quickReverseLabel, resolvePlaceAtLocation } from "../utils/geocoding";
-import { haversineMeters, formatDistance, googleMapsDirectionsUrl } from "../utils/geoDistance";
+import { haversineMeters, formatDistance, formatApproxDriveEta, googleMapsDirectionsUrl } from "../utils/geoDistance";
 import { useUserLocation } from "../hooks/useUserLocation";
 
+const liveUserIcon = L.divIcon({
+  className: "user-location-marker",
+  html: '<div class="pulse-dot pulse-dot--live"></div>',
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+  popupAnchor: [0, -9],
+});
+
+/** Blue dot for live GPS from useUserLocation (watch). */
+function LiveUserMarker({ userCoords }) {
+  if (!userCoords || !Number.isFinite(userCoords.lat) || !Number.isFinite(userCoords.lng)) return null;
+  return (
+    <Marker
+      position={[userCoords.lat, userCoords.lng]}
+      icon={liveUserIcon}
+      zIndexOffset={1000}
+    />
+  );
+}
+
 // ───────────────────────────────────────────
-// GPS locate control
+// Center / locate controls (uses live userCoords when available)
 // ───────────────────────────────────────────
 
-function LocationFinder() {
-  const [position, setPosition] = useState(null);
-  const buttonRef = useRef(null);
+function LocationControls({ userCoords }) {
+  const locateRef = useRef(null);
+  const recenterRef = useRef(null);
+
+  const map = useMap();
+  useMapEvents({
+    locationfound(e) {
+      map.flyTo(e.latlng, Math.max(map.getZoom(), 15), { duration: 0.65 });
+    },
+  });
 
   useEffect(() => {
-    if (buttonRef.current) {
-      L.DomEvent.disableClickPropagation(buttonRef.current);
-    }
+    [locateRef, recenterRef].forEach((r) => {
+      if (r.current) L.DomEvent.disableClickPropagation(r.current);
+    });
   }, []);
 
-  const map = useMapEvents({
-    locationfound(e) {
-      setPosition(e.latlng);
-      map.flyTo(e.latlng, 15);
-    },
-    locationerror(e) {
-      console.error("Location error:", e.message);
-      alert("Could not get your location. Check Location permissions.");
-    },
-  });
-
-  const userIcon = L.divIcon({
-    className: "user-location-marker",
-    html: '<div class="pulse-dot"></div>',
-    iconSize: [16, 16],
-    iconAnchor: [8, 8],
-    popupAnchor: [0, -8],
-  });
+  const flyToUser = useCallback(() => {
+    if (userCoords && Number.isFinite(userCoords.lat) && Number.isFinite(userCoords.lng)) {
+      map.flyTo([userCoords.lat, userCoords.lng], Math.max(map.getZoom(), 15), { duration: 0.65 });
+      return;
+    }
+    map.locate({ setView: true, maxZoom: 16 });
+  }, [map, userCoords]);
 
   return (
     <>
       <button
-        ref={buttonRef}
+        ref={locateRef}
         className="google-locate-btn"
         type="button"
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          map.locate();
+          flyToUser();
         }}
-        title="Show your location"
+        title="Your location"
       >
-        <svg focusable="false" viewBox="0 0 24 24" style={{ width: "24px", height: "24px", fill: "#666" }}>
+        <svg focusable="false" viewBox="0 0 24 24" style={{ width: "24px", height: "24px", fill: "#666" }} aria-hidden>
           <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
         </svg>
       </button>
-
-      {position !== null && <Marker position={position} icon={userIcon} />}
+      {userCoords && (
+        <button
+          ref={recenterRef}
+          type="button"
+          className="map-recenter-btn"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            flyToUser();
+          }}
+          title="Recenter on you"
+        >
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="#666" aria-hidden>
+            <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
+          </svg>
+        </button>
+      )}
     </>
   );
 }
@@ -321,6 +353,11 @@ function Map() {
     return null;
   }, [sheetDistanceM, locationStatus]);
 
+  const sheetEtaLabel = useMemo(() => {
+    if (sheetDistanceM == null || !Number.isFinite(sheetDistanceM)) return null;
+    return formatApproxDriveEta(sheetDistanceM);
+  }, [sheetDistanceM]);
+
   return (
     <div className="map-root">
       <div className="map-search-outer">
@@ -346,7 +383,8 @@ function Map() {
         <ZoomControl position="bottomright" />
         <MapFlyTo target={flyTo} />
         <MapInteractionLayer onTapMap={handleTapMap} onLongPressMap={handleLongPressMap} />
-        <LocationFinder />
+        <LiveUserMarker userCoords={userCoords} />
+        <LocationControls userCoords={userCoords} />
 
         <LayerGroup>
           {validShops.map((shop, index) => (
@@ -380,6 +418,7 @@ function Map() {
         title={sheetTitle}
         subtitle={sheetSubtitle}
         distanceLabel={sheetDistanceLabel}
+        etaLabel={sheetEtaLabel}
         isShop={Boolean(selectionShop)}
         onClose={clearMapSelection}
         onViewShop={() => {

@@ -2,7 +2,7 @@ import React, { useRef, useState, useCallback, useMemo } from "react";
 import { compressImage, fileToDataUrl } from "../utils/imageUtils";
 import { scanShop } from "../hooks/useApi";
 import { useToast } from "./Toast";
-import { haversineMeters, formatDistance, googleMapsDirectionsUrl } from "../utils/geoDistance";
+import { haversineMeters, formatDistance, formatApproxDriveEta, googleMapsDirectionsUrl } from "../utils/geoDistance";
 
 function shopLatLng(shop) {
   const lat = shop?.latitude ?? shop?.lat;
@@ -99,13 +99,16 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
     setTimeout(reset, 300);
   };
 
-  const bestMatchDistanceLabel = useMemo(() => {
+  const bestMatchNavLabels = useMemo(() => {
     const shop = scanResult?.bestMatch;
-    if (!shop) return null;
+    if (!shop) return { distance: null, eta: null };
     const ll = shopLatLng(shop);
-    if (!ll || !userCoords) return null;
+    if (!ll || !userCoords) return { distance: null, eta: null };
     const m = haversineMeters(userCoords.lat, userCoords.lng, ll.lat, ll.lng);
-    return formatDistance(m);
+    return {
+      distance: formatDistance(m),
+      eta: formatApproxDriveEta(m),
+    };
   }, [scanResult, userCoords]);
 
   const openDirectionsForShop = (shop) => {
@@ -134,7 +137,7 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
         <h2 className="scan-title">
           {stage === "idle" && "Scan Shop"}
           {stage === "captured" && "Image Captured"}
-          {stage === "scanning" && "Analyzing..."}
+          {stage === "scanning" && "Analyzing…"}
           {stage === "result" && (scanResult?.match ? "Match Found!" : "Scan Complete")}
         </h2>
         <div style={{ width: 28 }} /> {/* Spacer for centering */}
@@ -206,8 +209,11 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
               <div className="scan-pulse-ring"></div>
               <div className="scan-status-text">
                 <div className="spinner-white"></div>
-                <p>AI is analyzing the image...</p>
-                <p className="scan-substatus">Comparing with stored shops</p>
+                <p className="scan-analyzing-title">Analyzing…</p>
+                <p className="scan-substatus">Matching against your saved shops</p>
+                <div className="scan-analyzing-progress" aria-hidden>
+                  <div className="scan-analyzing-progress__indeterminate" />
+                </div>
               </div>
             </div>
           </div>
@@ -269,10 +275,15 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
                       </div>
                       <span>{Math.round(scanResult.bestMatch.score * 100)}% match</span>
                     </div>
-                    {shopLatLng(scanResult.bestMatch) && bestMatchDistanceLabel && (
-                      <p className="scan-match-distance">{bestMatchDistanceLabel} from you</p>
+                    {shopLatLng(scanResult.bestMatch) && bestMatchNavLabels.distance && (
+                      <p className="scan-match-distance">
+                        {bestMatchNavLabels.distance} from you
+                        {bestMatchNavLabels.eta && (
+                          <span className="scan-match-eta"> · {bestMatchNavLabels.eta}</span>
+                        )}
+                      </p>
                     )}
-                    {shopLatLng(scanResult.bestMatch) && !bestMatchDistanceLabel && !userCoords && (
+                    {shopLatLng(scanResult.bestMatch) && !bestMatchNavLabels.distance && !userCoords && (
                       <p className="scan-match-distance scan-match-distance--muted">Enable location for distance</p>
                     )}
                     <div

@@ -266,6 +266,15 @@ img {
   100% { background-position: 200% 0; }
 }
 
+@keyframes scanIndeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
 /* ════════════════════════════════════════════
    MODAL SYSTEM (shell + scrollable content)
    ════════════════════════════════════════════ */
@@ -964,6 +973,28 @@ img {
   font-weight: 400 !important;
 }
 
+.scan-analyzing-title {
+  font-size: 1.05rem;
+  letter-spacing: 0.02em;
+}
+
+.scan-analyzing-progress {
+  width: min(240px, 78vw);
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.scan-analyzing-progress__indeterminate {
+  height: 100%;
+  width: 38%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--primary-light), rgba(255, 255, 255, 0.95));
+  animation: scanIndeterminate 1.15s ease-in-out infinite;
+}
+
 /* ─── Scan Results ─── */
 .scan-result {
   width: 100%;
@@ -1565,6 +1596,14 @@ img {
   animation: pulse 1.5s infinite;
 }
 
+.pulse-dot--live {
+  box-shadow: 0 0 12px rgba(0, 122, 255, 0.65);
+}
+
+.pulse-dot--live::after {
+  animation-duration: 1.1s;
+}
+
 /* ════════════════════════════════════════════
    MAP OVERLAYS — search, action sheet, selection pin
    ════════════════════════════════════════════ */
@@ -1601,6 +1640,13 @@ img {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.google-search-bar.map-search-bar.map-search-bar--open {
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+  border-color: rgba(108, 92, 231, 0.35);
 }
 
 .map-search-bar__icon {
@@ -1807,7 +1853,7 @@ img {
 }
 
 .map-action-sheet__distance {
-  margin: 0 0 var(--space-2);
+  margin: 0 0 var(--space-1);
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--primary);
@@ -1852,6 +1898,58 @@ img {
   font-size: 0.75rem;
   color: var(--text-muted);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.map-search-highlight {
+  background: rgba(255, 235, 59, 0.45);
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+  font-weight: 700;
+}
+
+.map-search-loading-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.map-search-loading-spinner {
+  flex-shrink: 0;
+}
+
+.map-search-suggestions__section-title {
+  padding: var(--space-2) var(--space-4) var(--space-1);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.map-search-suggestions__item--recent {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.map-search-suggestions__recent-icon {
+  width: 1.25rem;
+  text-align: center;
+  opacity: 0.55;
+  font-size: 0.95rem;
+}
+
+.map-action-sheet__eta {
+  margin: calc(var(--space-2) * -0.5) 0 var(--space-2);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
 .add-shop-location-block {
@@ -1914,6 +2012,11 @@ img {
   margin: 8px 0 0;
   font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
+
+.scan-match-eta {
+  opacity: 0.9;
   font-weight: 500;
 }
 
@@ -1983,6 +2086,34 @@ img {
 
 .google-locate-btn:hover {
   background: #f8f9fa;
+}
+
+.map-recenter-btn {
+  position: absolute;
+  bottom: calc(
+    var(--map-ui-bottom) + var(--map-zoom-stack-height) + var(--map-locate-above-zoom-gap) + 48px
+  );
+  right: max(var(--space-2), env(safe-area-inset-right, 0px));
+  z-index: var(--z-map-ui);
+  background: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s, transform 0.15s ease;
+}
+
+.map-recenter-btn:hover {
+  background: #f8f9fa;
+}
+
+.map-recenter-btn:active {
+  transform: scale(0.96);
 }
 
 /* ─── Loader Overlay ─── */

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { parseLatLngQuery, nominatimSearch, formatSearchHit } from "../utils/geocoding";
 import { haversineMeters, formatDistance } from "../utils/geoDistance";
+import { getRecentSearches, pushRecentSearch } from "../utils/recentSearches";
 
 function distanceFromUser(userCoords, lat, lng) {
   if (!userCoords || lat == null || lng == null) return null;
@@ -8,10 +9,24 @@ function distanceFromUser(userCoords, lat, lng) {
   return haversineMeters(userCoords.lat, userCoords.lng, lat, lng);
 }
 
-/**
- * Map search: coordinates, Nominatim places, and local shop names — distance-aware, Google-style list.
- */
-export default function MapSearchBar({
+/** Highlight first case-insensitive match of query in text (Google-style). */
+function HighlightLabel({ text, query }) {
+  const t = String(text ?? "");
+  const q = query.trim();
+  if (!q || !t) return <>{t}</>;
+  const lower = t.toLowerCase();
+  const qi = lower.indexOf(q.toLowerCase());
+  if (qi === -1) return <>{t}</>;
+  return (
+    <>
+      {t.slice(0, qi)}
+      <mark className="map-search-highlight">{t.slice(qi, qi + q.length)}</mark>
+      {t.slice(qi + q.length)}
+    </>
+  );
+}
+
+function MapSearchBar({
   shops = [],
   userCoords = null,
   locationStatus = "idle",
@@ -24,8 +39,12 @@ export default function MapSearchBar({
   const [loading, setLoading] = useState(false);
   const [osmResults, setOsmResults] = useState([]);
   const [error, setError] = useState(null);
+  const [recentTick, setRecentTick] = useState(0);
   const abortRef = useRef(null);
   const rootRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const recents = useMemo(() => getRecentSearches(), [recentTick]);
 
   const shopMatches = useCallback(
     (q) => {
@@ -35,6 +54,8 @@ export default function MapSearchBar({
     },
     [shops]
   );
+
+  const shopsHit = useMemo(() => shopMatches(query), [shopMatches, query]);
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -77,7 +98,7 @@ export default function MapSearchBar({
   }, []);
 
   const coords = parseLatLngQuery(query);
-  const shopsHit = shopMatches(query);
+  const trimmedQuery = query.trim();
 
   const suggestionRows = useMemo(() => {
     const rows = [];
@@ -143,7 +164,9 @@ export default function MapSearchBar({
     return rows;
   }, [coords, shopsHit, osmResults, userCoords, onPickCoords, onPickShop, onPickPlace]);
 
-  const showSuggestions = open && query.trim().length > 0;
+  const hasQuery = trimmedQuery.length > 0;
+  const showResultsPanel = open && hasQuery;
+  const showRecentsPanel = open && !hasQuery && recents.length > 0;
 
   const locationHint =
     locationStatus === "denied" ||
@@ -153,13 +176,23 @@ export default function MapSearchBar({
       ? "Distances need location access — enable in browser settings"
       : null;
 
+  const recordAndPick = useCallback(
+    (labelForRecent, apply) => {
+      if (labelForRecent) pushRecentSearch(labelForRecent);
+      setRecentTick((t) => t + 1);
+      apply();
+    },
+    []
+  );
+
   return (
     <div className="map-search-bar-wrap" ref={rootRef}>
-      <div className="google-search-bar map-search-bar">
+      <div className={`google-search-bar map-search-bar ${open ? "map-search-bar--open" : ""}`}>
         <svg className="map-search-bar__icon" viewBox="0 0 24 24" aria-hidden>
           <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
         </svg>
         <input
+          ref={inputRef}
           type="search"
           enterKeyHint="search"
           autoComplete="off"
@@ -189,11 +222,41 @@ export default function MapSearchBar({
         )}
       </div>
 
-      {showSuggestions && (
-        <ul className="map-search-suggestions" role="listbox">
+      {showRecentsPanel && (
+        <ul className="map-search-suggestions map-search-suggestions--recents" role="listbox" aria-label="Recent searches">
+          <li className="map-search-suggestions__section-title">Recent</li>
+          {recents.map((r) => (
+            <li key={r}>
+              <button
+                type="button"
+                className="map-search-suggestions__item map-search-suggestions__item--recent"
+                onClick={() => {
+                  setQuery(r);
+                  setOpen(true);
+                  inputRef.current?.focus();
+                }}
+              >
+                <span className="map-search-suggestions__recent-icon" aria-hidden>
+                  ↻
+                </span>
+                <span className="map-search-suggestions__label">{r}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {showResultsPanel && (
+        <ul className="map-search-suggestions map-search-suggestions--results" role="listbox">
           {locationHint && (
             <li className="map-search-suggestions__hint" role="note">
               {locationHint}
+            </li>
+          )}
+          {loading && trimmedQuery.length >= 3 && (
+            <li className="map-search-loading-row" aria-live="polite">
+              <span className="spinner-small map-search-loading-spinner" />
+              <span>Searching…</span>
             </li>
           )}
           {suggestionRows.map((row) => (
@@ -202,14 +265,19 @@ export default function MapSearchBar({
                 type="button"
                 className="map-search-suggestions__item map-search-suggestions__item--row"
                 onClick={() => {
-                  row.onPick();
-                  setQuery(row.kind === "coords" ? row.sub : row.label);
-                  setOpen(false);
-                  setOsmResults([]);
+                  const labelText = row.kind === "coords" ? row.sub : row.label;
+                  recordAndPick(labelText, () => {
+                    row.onPick();
+                    setQuery(row.kind === "coords" ? row.sub : row.label);
+                    setOpen(false);
+                    setOsmResults([]);
+                  });
                 }}
               >
                 <span className="map-search-suggestions__main">
-                  <span className="map-search-suggestions__label">{row.label}</span>
+                  <span className="map-search-suggestions__label">
+                    <HighlightLabel text={row.label} query={trimmedQuery} />
+                  </span>
                   <span className="map-search-suggestions__meta">{row.sub}</span>
                 </span>
                 {formatDistance(row.distanceM) && (
@@ -218,11 +286,10 @@ export default function MapSearchBar({
               </button>
             </li>
           ))}
-          {loading && <li className="map-search-suggestions__status">Searching places…</li>}
           {error && <li className="map-search-suggestions__status map-search-suggestions__status--error">{error}</li>}
           {!loading &&
             !error &&
-            query.trim().length >= 3 &&
+            trimmedQuery.length >= 3 &&
             osmResults.length === 0 &&
             shopsHit.length === 0 &&
             !coords && <li className="map-search-suggestions__status">No results</li>}
@@ -231,3 +298,5 @@ export default function MapSearchBar({
     </div>
   );
 }
+
+export default React.memo(MapSearchBar);
