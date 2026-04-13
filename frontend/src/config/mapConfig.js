@@ -5,6 +5,10 @@
 export const MAP_CONFIG = {
   /** Overpass `around:` radius (m) for named POI lookup on map tap. */
   POI_RADIUS_METERS: 50,
+  /** Wider Overpass search on tap (meters) — improves match to visible map labels vs raw tap. */
+  POI_TAP_SEARCH_RADIUS_METERS: 72,
+  /** Max haversine distance from tap to still snap selection to a named POI (meters). */
+  POI_SNAP_MAX_METERS_FROM_TAP: 95,
   /** Extra meters beyond POI_RADIUS_METERS — max haversine from tap to accept a matched POI. */
   POI_PREFER_DISTANCE_METERS: 30,
   /** If GPS fix is older than this, the locate button calls map.locate() instead of flying to cached coords. */

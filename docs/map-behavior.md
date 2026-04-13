@@ -36,15 +36,15 @@ These run **in parallel** (`Promise.all`) for lower perceived latency.
 
 ### POI preference
 
-- Overpass returns elements with a **`name`** tag.
-- The closest candidate by **haversine** (meters) from the tap wins **only if**  
-  `distance ≤ POI_RADIUS_METERS + POI_PREFER_DISTANCE_METERS`.
+- Tap resolution uses **`POI_TAP_SEARCH_RADIUS_METERS`** for the Overpass `around:` query and **`POI_SNAP_MAX_METERS_FROM_TAP`** as the max haversine from the tap to accept a named feature (see `mapConfig.js`).
+- Overpass returns elements with a **`name`** tag; the **nearest** candidate by haversine wins when within the snap cap.
 - If a POI wins, the UI uses **POI name** and **POI coordinates** (snapped to the feature).
 
 ### Coordinate snapping
 
 - If **no** nearby named POI qualifies, the label comes from **Nominatim reverse** (`formatReverseResult`).
-- When Nominatim returns its own `lat`/`lon`, the selection may **snap** to that point (same as before reverse-only behavior).
+- When Nominatim returns its own `lat`/`lon`, the selection may **snap** to that point.
+- If neither POI nor reverse yields a usable name, the UI shows **“Unknown location”** (coordinates still used for directions).
 
 **Raster tile note:** The basemap is **raster** (e.g. Google-style tiles). Icons drawn on the tile are not separate DOM targets; the app always works from **tap lat/lng**, then OSM data.
 

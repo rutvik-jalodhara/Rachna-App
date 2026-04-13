@@ -112,9 +112,13 @@ export async function quickReverseLabel(lat, lng, { signal } = {}) {
 /**
  * Named POI from Overpass within ~radiusM (see MAP_CONFIG.OVERPASS_TAGS).
  */
-export async function nearbyNamedPoi(lat, lng, { signal, radiusM = MAP_CONFIG.POI_RADIUS_METERS } = {}) {
+export async function nearbyNamedPoi(
+  lat,
+  lng,
+  { signal, radiusM = MAP_CONFIG.POI_RADIUS_METERS, maxSnapMeters } = {}
+) {
   const query = buildOverpassAroundQuery(lat, lng, radiusM, MAP_CONFIG.OVERPASS_TAGS, MAP_CONFIG.OVERPASS_TIMEOUT_SEC);
-  const maxAcceptM = radiusM + MAP_CONFIG.POI_PREFER_DISTANCE_METERS;
+  const maxAcceptM = maxSnapMeters ?? radiusM + MAP_CONFIG.POI_PREFER_DISTANCE_METERS;
   try {
     const overpassRes = await fetch(
       `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`,
@@ -144,27 +148,44 @@ export async function nearbyNamedPoi(lat, lng, { signal, radiusM = MAP_CONFIG.PO
 }
 
 /**
- * Reverse geocode + nearby Overpass POI in parallel; prefer POI name when one is close to the tap.
+ * Reverse geocode + nearby Overpass POI in parallel.
+ * Prefer nearest named POI within snap distance; else reverse label; else "Unknown location".
+ * @returns {{ label: string, lat: number, lng: number, source: 'poi' | 'reverse' | 'unknown' }}
  */
 export async function resolveMapTapLabel(lat, lng, { signal } = {}) {
+  const searchR = MAP_CONFIG.POI_TAP_SEARCH_RADIUS_METERS;
+  const snapMax = MAP_CONFIG.POI_SNAP_MAX_METERS_FROM_TAP;
+
   const [poi, rev] = await Promise.all([
-    nearbyNamedPoi(lat, lng, { signal, radiusM: MAP_CONFIG.POI_RADIUS_METERS }).catch(() => null),
+    nearbyNamedPoi(lat, lng, {
+      signal,
+      radiusM: searchR,
+      maxSnapMeters: snapMax,
+    }).catch(() => null),
     nominatimReverse(lat, lng, { signal }).catch(() => null),
   ]);
+
   if (poi?.name) {
-    return { label: poi.name, lat: poi.lat, lng: poi.lng };
+    return { label: poi.name, lat: poi.lat, lng: poi.lng, source: "poi" };
   }
+
   const addr = rev ? formatReverseResult(rev) : "";
-  let finalLat = lat;
-  let finalLng = lng;
-  if (rev?.lat != null && rev?.lon != null) {
-    finalLat = parseFloat(rev.lat);
-    finalLng = parseFloat(rev.lon);
+  const trimmed = addr.trim();
+  if (trimmed) {
+    let finalLat = lat;
+    let finalLng = lng;
+    if (rev?.lat != null && rev?.lon != null) {
+      finalLat = parseFloat(rev.lat);
+      finalLng = parseFloat(rev.lon);
+    }
+    return { label: trimmed, lat: finalLat, lng: finalLng, source: "reverse" };
   }
+
   return {
-    label: addr || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-    lat: finalLat,
-    lng: finalLng,
+    label: "Unknown location",
+    lat,
+    lng,
+    source: "unknown",
   };
 }
 

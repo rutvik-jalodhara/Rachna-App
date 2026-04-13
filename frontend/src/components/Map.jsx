@@ -100,13 +100,32 @@ function LocationControls({ userCoords, lastFixAt }) {
 // Main Map
 // ───────────────────────────────────────────
 
-const selectionPinIcon = L.divIcon({
+const selectionPinIconDefault = L.divIcon({
   className: "map-selection-pin map-selection-pin--active",
   html: '<div class="map-selection-pin__inner"></div>',
   iconSize: [28, 36],
   iconAnchor: [14, 34],
   popupAnchor: [0, -34],
 });
+
+const selectionPinIconResolving = L.divIcon({
+  className: "map-selection-pin map-selection-pin--resolving",
+  html: '<div class="map-selection-pin__inner"></div>',
+  iconSize: [28, 36],
+  iconAnchor: [14, 34],
+  popupAnchor: [0, -34],
+});
+
+const selectionPinIconPoi = L.divIcon({
+  className: "map-selection-pin map-selection-pin--poi-match",
+  html: '<div class="map-selection-pin__inner"></div>',
+  iconSize: [28, 36],
+  iconAnchor: [14, 34],
+  popupAnchor: [0, -34],
+});
+
+/** Only re-center map after resolve if POI/reverse moved the pin enough (reduces flicker). */
+const TAP_RESOLVE_FLY_MIN_M = 35;
 
 function Map() {
   const { showToast } = useToast();
@@ -129,6 +148,7 @@ function Map() {
 
   const tapAbortRef = useRef(null);
   const enrichAbortRef = useRef(null);
+  const tapResolutionSeqRef = useRef(0);
 
   useEffect(() => {
     fetchShops()
@@ -202,28 +222,45 @@ function Map() {
   const handleTapMap = useCallback(
     async (latlng) => {
       const { lat, lng } = latlng;
+      const seq = ++tapResolutionSeqRef.current;
+
       setSelectionShop(null);
-      setSelectionPoint({ lat, lng, label: "…" });
+      setSelectionPoint({
+        lat,
+        lng,
+        tapLat: lat,
+        tapLng: lng,
+        resolving: true,
+        label: "",
+        matchSource: null,
+      });
       setSheetOpen(true);
       setFlyTo({ center: [lat, lng], zoom: Math.max(14, 15), key: Date.now() });
 
       tapAbortRef.current?.abort();
       tapAbortRef.current = new AbortController();
       const { signal } = tapAbortRef.current;
+
       const resolved = await resolveMapTapLabel(lat, lng, { signal });
-      if (signal.aborted) return;
-      setSelectionPoint((prev) => {
-        if (!prev || prev.lat !== lat || prev.lng !== lng) return prev;
-        return {
-          lat: resolved.lat,
-          lng: resolved.lng,
-          label: resolved.label,
-        };
-      });
-      setFlyTo({
-        center: [resolved.lat, resolved.lng],
-        zoom: Math.max(15, 16),
-        key: Date.now(),
+      if (signal.aborted || seq !== tapResolutionSeqRef.current) return;
+
+      const movedM = haversineMeters(lat, lng, resolved.lat, resolved.lng);
+      if (movedM >= TAP_RESOLVE_FLY_MIN_M) {
+        setFlyTo({
+          center: [resolved.lat, resolved.lng],
+          zoom: Math.max(15, 16),
+          key: Date.now(),
+        });
+      }
+
+      setSelectionPoint({
+        lat: resolved.lat,
+        lng: resolved.lng,
+        tapLat: lat,
+        tapLng: lng,
+        resolving: false,
+        label: resolved.label,
+        matchSource: resolved.source,
       });
     },
     []
@@ -254,7 +291,15 @@ function Map() {
 
   const handleSearchPlace = useCallback((place) => {
     setSelectionShop(null);
-    setSelectionPoint({ lat: place.lat, lng: place.lng, label: place.label || "Selected place" });
+    setSelectionPoint({
+      lat: place.lat,
+      lng: place.lng,
+      tapLat: place.lat,
+      tapLng: place.lng,
+      resolving: false,
+      label: place.label || "Selected place",
+      matchSource: "reverse",
+    });
     setSheetOpen(true);
     setFlyTo({ center: [place.lat, place.lng], zoom: 16, key: Date.now() });
   }, []);
@@ -271,18 +316,23 @@ function Map() {
     setSelectionPoint({
       lat: coords.lat,
       lng: coords.lng,
+      tapLat: coords.lat,
+      tapLng: coords.lng,
+      resolving: false,
       label: coords.label || `${coords.lat}, ${coords.lng}`,
+      matchSource: null,
     });
     setSheetOpen(true);
     setFlyTo({ center: [coords.lat, coords.lng], zoom: 16, key: Date.now() });
   }, []);
 
   const openAddShopAtSelection = useCallback(() => {
+    if (selectionPoint?.resolving) return;
     const lat = selectionShop?.latitude ?? selectionPoint?.lat;
     const lng = selectionShop?.longitude ?? selectionPoint?.lng;
     if (lat == null || lng == null) return;
     setSelectedLocation({ lat, lng });
-    const fromPoint = selectionPoint?.label && selectionPoint.label !== "…" ? selectionPoint.label : "";
+    const fromPoint = selectionPoint?.label?.trim() ? selectionPoint.label : "";
     setDetectedName(selectionShop ? "" : fromPoint);
     setAddModalOpen(true);
     setSheetOpen(false);
@@ -335,7 +385,15 @@ function Map() {
 
   const sheetTitle = selectionShop
     ? selectionShop.shop_name || "Shop"
-    : selectionPoint?.label || "Location";
+    : selectionPoint?.resolving
+      ? ""
+      : selectionPoint?.label || "Location";
+
+  const sheetTitleLoading = Boolean(selectionPoint?.resolving);
+  const sheetLocationMatchHint =
+    !selectionShop && selectionPoint && !selectionPoint.resolving && selectionPoint.matchSource === "poi"
+      ? "Matched nearby place"
+      : null;
 
   const directionsLat = selectionShop ? selectionShop.latitude : selectionPoint?.lat;
   const directionsLng = selectionShop ? selectionShop.longitude : selectionPoint?.lng;
@@ -352,6 +410,7 @@ function Map() {
   }, [userCoords, selectionShop, selectionPoint]);
 
   const sheetDistanceLabel = useMemo(() => {
+    if (selectionPoint?.resolving) return null;
     if (sheetDistanceM != null && Number.isFinite(sheetDistanceM)) {
       return `${formatDistance(sheetDistanceM)} away`;
     }
@@ -362,12 +421,13 @@ function Map() {
       return "Location unavailable — distances hidden";
     }
     return null;
-  }, [sheetDistanceM, locationStatus]);
+  }, [sheetDistanceM, locationStatus, selectionPoint?.resolving]);
 
   const sheetEtaLabel = useMemo(() => {
+    if (selectionPoint?.resolving) return null;
     if (sheetDistanceM == null || !Number.isFinite(sheetDistanceM)) return null;
     return formatApproxDriveEta(sheetDistanceM);
-  }, [sheetDistanceM]);
+  }, [sheetDistanceM, selectionPoint?.resolving]);
 
   return (
     <div className="map-root">
@@ -419,7 +479,17 @@ function Map() {
             />
           ))}
           {selectionPoint && !selectionShop && (
-            <Marker position={[selectionPoint.lat, selectionPoint.lng]} icon={selectionPinIcon} interactive={false} />
+            <Marker
+              position={[selectionPoint.lat, selectionPoint.lng]}
+              icon={
+                selectionPoint.resolving
+                  ? selectionPinIconResolving
+                  : selectionPoint.matchSource === "poi"
+                    ? selectionPinIconPoi
+                    : selectionPinIconDefault
+              }
+              interactive={false}
+            />
           )}
         </LayerGroup>
       </MapContainer>
@@ -434,16 +504,19 @@ function Map() {
       <MapActionSheet
         isOpen={sheetOpen && (selectionShop || selectionPoint)}
         title={sheetTitle}
+        titleLoading={sheetTitleLoading}
+        locationMatchHint={sheetLocationMatchHint}
         distanceLabel={sheetDistanceLabel}
         etaLabel={sheetEtaLabel}
+        actionsDisabled={sheetTitleLoading}
         onClose={clearMapSelection}
         onAddShop={openAddShopAtSelection}
         onDirections={() => {
-          if (directionsLat == null || directionsLng == null) return;
+          if (sheetTitleLoading || directionsLat == null || directionsLng == null) return;
           window.open(googleMapsDirectionsUrl(directionsLat, directionsLng), "_blank", "noopener,noreferrer");
         }}
         onStartNavigation={() => {
-          if (directionsLat == null || directionsLng == null) return;
+          if (sheetTitleLoading || directionsLat == null || directionsLng == null) return;
           window.open(googleMapsDirectionsUrl(directionsLat, directionsLng, { driving: true }), "_blank", "noopener,noreferrer");
         }}
       />
