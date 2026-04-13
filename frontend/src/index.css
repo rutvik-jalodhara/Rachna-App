@@ -1806,6 +1806,136 @@ img {
   color: var(--danger);
 }
 
+.map-action-sheet__distance {
+  margin: 0 0 var(--space-2);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.map-action-sheet__nav-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.map-action-sheet__btn--nav {
+  background: rgba(108, 92, 231, 0.12);
+  color: var(--primary);
+  box-shadow: none;
+}
+
+.map-search-suggestions__item--row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.map-search-suggestions__main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.map-search-suggestions__distance {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.map-search-suggestions__hint {
+  padding: var(--space-2) var(--space-4);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.add-shop-location-block {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.add-shop-coords-readout {
+  margin: 0 0 var(--space-1);
+  font-family: ui-monospace, monospace;
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.add-shop-coords-source {
+  margin: 0 0 var(--space-3);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.add-shop-location-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.add-shop-loc-chip {
+  flex: 1;
+  min-width: 140px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1.5px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+}
+
+.add-shop-loc-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.add-shop-loc-chip--active {
+  border-color: var(--primary);
+  background: rgba(108, 92, 231, 0.1);
+  color: var(--primary-dark);
+}
+
+.add-shop-gps-error {
+  margin: var(--space-2) 0 0;
+  font-size: 0.8rem;
+  color: var(--danger);
+}
+
+.scan-match-distance {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
+
+.scan-match-distance--muted {
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 400;
+}
+
+.scan-nav-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  width: 100%;
+}
+
+.scan-nav-actions__btn {
+  flex: 1;
+  justify-content: center;
+  font-size: 0.85rem !important;
+  padding: var(--space-2) var(--space-2) !important;
+}
+
 /* Dropped-pin style for map selection */
 .map-selection-pin {
   background: transparent;

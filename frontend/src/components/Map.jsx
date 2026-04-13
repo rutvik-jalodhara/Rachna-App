@@ -6,7 +6,7 @@ import {
   ZoomControl,
   useMapEvents,
 } from "react-leaflet";
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import L from "leaflet";
 import AddShopModal from "./AddShopModal";
 import ScanModal from "./ScanModal";
@@ -18,6 +18,8 @@ import MapFlyTo from "./MapFlyTo";
 import { useToast } from "./Toast";
 import { fetchShops, addShop, deleteShop as deleteShopApi } from "../hooks/useApi";
 import { quickReverseLabel, resolvePlaceAtLocation } from "../utils/geocoding";
+import { haversineMeters, formatDistance, googleMapsDirectionsUrl } from "../utils/geoDistance";
+import { useUserLocation } from "../hooks/useUserLocation";
 
 // ───────────────────────────────────────────
 // GPS locate control
@@ -87,14 +89,9 @@ const selectionPinIcon = L.divIcon({
   popupAnchor: [0, -34],
 });
 
-function openGoogleDirections(lat, lng) {
-  const dest = `${lat},${lng}`;
-  const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`;
-  window.open(url, "_blank", "noopener,noreferrer");
-}
-
 function Map() {
   const { showToast } = useToast();
+  const { coords: userCoords, status: locationStatus } = useUserLocation();
   const [shops, setShops] = useState([]);
   const [isEnriching, setIsEnriching] = useState(false);
   const [flyTo, setFlyTo] = useState(null);
@@ -300,11 +297,37 @@ function Map() {
   const directionsLat = selectionShop ? selectionShop.latitude : selectionPoint?.lat;
   const directionsLng = selectionShop ? selectionShop.longitude : selectionPoint?.lng;
 
+  const sheetDistanceM = useMemo(() => {
+    if (!userCoords) return null;
+    if (selectionShop && Number.isFinite(selectionShop.latitude) && Number.isFinite(selectionShop.longitude)) {
+      return haversineMeters(userCoords.lat, userCoords.lng, selectionShop.latitude, selectionShop.longitude);
+    }
+    if (selectionPoint && Number.isFinite(selectionPoint.lat) && Number.isFinite(selectionPoint.lng)) {
+      return haversineMeters(userCoords.lat, userCoords.lng, selectionPoint.lat, selectionPoint.lng);
+    }
+    return null;
+  }, [userCoords, selectionShop, selectionPoint]);
+
+  const sheetDistanceLabel = useMemo(() => {
+    if (sheetDistanceM != null && Number.isFinite(sheetDistanceM)) {
+      return `${formatDistance(sheetDistanceM)} away`;
+    }
+    if (locationStatus === "denied" || locationStatus === "unsupported") {
+      return "Location off — enable for distances";
+    }
+    if (locationStatus === "error" || locationStatus === "unavailable") {
+      return "Location unavailable — distances hidden";
+    }
+    return null;
+  }, [sheetDistanceM, locationStatus]);
+
   return (
     <div className="map-root">
       <div className="map-search-outer">
         <MapSearchBar
           shops={validShops}
+          userCoords={userCoords}
+          locationStatus={locationStatus}
           onPickPlace={handleSearchPlace}
           onPickShop={handleSearchShop}
           onPickCoords={handleSearchCoords}
@@ -356,6 +379,7 @@ function Map() {
         isOpen={sheetOpen && (selectionShop || selectionPoint)}
         title={sheetTitle}
         subtitle={sheetSubtitle}
+        distanceLabel={sheetDistanceLabel}
         isShop={Boolean(selectionShop)}
         onClose={clearMapSelection}
         onViewShop={() => {
@@ -373,7 +397,11 @@ function Map() {
         }}
         onDirections={() => {
           if (directionsLat == null || directionsLng == null) return;
-          openGoogleDirections(directionsLat, directionsLng);
+          window.open(googleMapsDirectionsUrl(directionsLat, directionsLng), "_blank", "noopener,noreferrer");
+        }}
+        onStartNavigation={() => {
+          if (directionsLat == null || directionsLng == null) return;
+          window.open(googleMapsDirectionsUrl(directionsLat, directionsLng, { driving: true }), "_blank", "noopener,noreferrer");
         }}
         onDelete={
           selectionShop
@@ -398,7 +426,12 @@ function Map() {
         location={selectedLocation}
       />
 
-      <ScanModal isOpen={scanModalOpen} onClose={() => setScanModalOpen(false)} onMatchFound={handleMatchFound} />
+      <ScanModal
+        isOpen={scanModalOpen}
+        onClose={() => setScanModalOpen(false)}
+        onMatchFound={handleMatchFound}
+        userCoords={userCoords}
+      />
 
       <ShopDetailModal
         shop={detailShop}

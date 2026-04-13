@@ -1,7 +1,15 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useCallback, useMemo } from "react";
 import { compressImage, fileToDataUrl } from "../utils/imageUtils";
 import { scanShop } from "../hooks/useApi";
 import { useToast } from "./Toast";
+import { haversineMeters, formatDistance, googleMapsDirectionsUrl } from "../utils/geoDistance";
+
+function shopLatLng(shop) {
+  const lat = shop?.latitude ?? shop?.lat;
+  const lng = shop?.longitude ?? shop?.lng;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
 
 /**
  * ScanModal — Full-screen AI scanner experience.
@@ -10,8 +18,9 @@ import { useToast } from "./Toast";
  *   - isOpen: boolean
  *   - onClose: () => void
  *   - onMatchFound: (shop) => void — Navigate to matched shop
+ *   - userCoords: { lat, lng } | null — for distance + navigation
  */
-export default function ScanModal({ isOpen, onClose, onMatchFound }) {
+export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = null }) {
   const { showToast } = useToast();
   const cameraRef = useRef(null);
   const galleryRef = useRef(null);
@@ -88,6 +97,27 @@ export default function ScanModal({ isOpen, onClose, onMatchFound }) {
   const handleClose = () => {
     onClose();
     setTimeout(reset, 300);
+  };
+
+  const bestMatchDistanceLabel = useMemo(() => {
+    const shop = scanResult?.bestMatch;
+    if (!shop) return null;
+    const ll = shopLatLng(shop);
+    if (!ll || !userCoords) return null;
+    const m = haversineMeters(userCoords.lat, userCoords.lng, ll.lat, ll.lng);
+    return formatDistance(m);
+  }, [scanResult, userCoords]);
+
+  const openDirectionsForShop = (shop) => {
+    const ll = shopLatLng(shop);
+    if (!ll) return;
+    window.open(googleMapsDirectionsUrl(ll.lat, ll.lng), "_blank", "noopener,noreferrer");
+  };
+
+  const openStartForShop = (shop) => {
+    const ll = shopLatLng(shop);
+    if (!ll) return;
+    window.open(googleMapsDirectionsUrl(ll.lat, ll.lng, { driving: true }), "_blank", "noopener,noreferrer");
   };
 
   if (!isOpen) return null;
@@ -238,6 +268,39 @@ export default function ScanModal({ isOpen, onClose, onMatchFound }) {
                         />
                       </div>
                       <span>{Math.round(scanResult.bestMatch.score * 100)}% match</span>
+                    </div>
+                    {shopLatLng(scanResult.bestMatch) && bestMatchDistanceLabel && (
+                      <p className="scan-match-distance">{bestMatchDistanceLabel} from you</p>
+                    )}
+                    {shopLatLng(scanResult.bestMatch) && !bestMatchDistanceLabel && !userCoords && (
+                      <p className="scan-match-distance scan-match-distance--muted">Enable location for distance</p>
+                    )}
+                    <div
+                      className="scan-nav-actions"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="btn btn-cancel scan-nav-actions__btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openDirectionsForShop(scanResult.bestMatch);
+                        }}
+                      >
+                        Directions
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-submit scan-nav-actions__btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openStartForShop(scanResult.bestMatch);
+                        }}
+                      >
+                        Start
+                      </button>
                     </div>
                   </div>
                   <svg viewBox="0 0 24 24" width="24" height="24" fill="#6c5ce7" className="match-arrow">

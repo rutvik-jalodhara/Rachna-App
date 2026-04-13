@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import ImageUploader from "./ImageUploader";
 import { useToast } from "./Toast";
 
@@ -16,15 +16,14 @@ const CATEGORIES = [
   "Other",
 ];
 
+const GEO_OPTIONS = {
+  enableHighAccuracy: false,
+  maximumAge: 60_000,
+  timeout: 12_000,
+};
+
 /**
- * AddShopModal — Enhanced shop creation form with image upload.
- *
- * Props:
- *   - isOpen: boolean
- *   - onClose: () => void
- *   - onSubmit: (shopData, imageFile) => Promise<void>
- *   - initialName: string (pre-detected shop name)
- *   - location: { lat, lng }
+ * AddShopModal — shop creation with map or GPS coordinates.
  */
 export default function AddShopModal({
   isOpen,
@@ -46,15 +45,61 @@ export default function AddShopModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  // Reset form when initialName changes (new modal open)
-  React.useEffect(() => {
+  const [coordSource, setCoordSource] = useState("map");
+  const [gpsCoords, setGpsCoords] = useState(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsError, setGpsError] = useState(null);
+
+  useEffect(() => {
     if (isOpen) {
       setFormData((prev) => ({
         ...prev,
         shop_name: initialName || prev.shop_name,
       }));
+      setCoordSource("map");
+      setGpsCoords(null);
+      setGpsError(null);
+      setGpsLoading(false);
     }
   }, [isOpen, initialName]);
+
+  const effectiveCoords =
+    coordSource === "current" && gpsCoords
+      ? gpsCoords
+      : location && location.lat != null && location.lng != null
+        ? { lat: location.lat, lng: location.lng }
+        : null;
+
+  const useCurrentLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setGpsError("Geolocation is not supported.");
+      showToast("Geolocation not supported", "error");
+      return;
+    }
+    setGpsLoading(true);
+    setGpsError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGpsCoords({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
+        setCoordSource("current");
+        setGpsLoading(false);
+        showToast("Using your current location", "success");
+      },
+      (err) => {
+        setGpsLoading(false);
+        const msg =
+          err.code === 1
+            ? "Permission denied. Allow location access to use this option."
+            : err.message || "Could not read your location.";
+        setGpsError(msg);
+        showToast(msg, "error");
+      },
+      GEO_OPTIONS
+    );
+  }, [showToast]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -79,6 +124,11 @@ export default function AddShopModal({
       return;
     }
 
+    if (!effectiveCoords || !Number.isFinite(effectiveCoords.lat) || !Number.isFinite(effectiveCoords.lng)) {
+      showToast("Choose a location on the map or use current location", "error");
+      return;
+    }
+
     setIsSubmitting(true);
     setUploadProgress(0);
 
@@ -86,14 +136,13 @@ export default function AddShopModal({
       await onSubmit(
         {
           ...formData,
-          latitude: location?.lat,
-          longitude: location?.lng,
+          latitude: effectiveCoords.lat,
+          longitude: effectiveCoords.lng,
         },
         imageFile,
         (progress) => setUploadProgress(progress)
       );
 
-      // Reset form on success
       setFormData({
         shop_name: "",
         description: "",
@@ -112,23 +161,53 @@ export default function AddShopModal({
 
   if (!isOpen) return null;
 
+  const hasMapLocation = location && Number.isFinite(location.lat) && Number.isFinite(location.lng);
+
   return (
     <div className="modal modal--backdrop" onClick={onClose}>
       <div className="modal__sheet glass-modal add-shop-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Header stays visible; form scrolls on small screens */}
         <div className="modal-header modal-header--sticky">
-          <h3>
-            {formData.shop_name
-              ? `Add "${formData.shop_name}"`
-              : "Add New Shop"}
-          </h3>
+          <h3>{formData.shop_name ? `Add "${formData.shop_name}"` : "Add New Shop"}</h3>
           <button className="modal-close-btn" onClick={onClose} type="button">
             ✕
           </button>
         </div>
 
         <form className="modal-content modal-content--form" onSubmit={handleSubmit}>
-          {/* Image Upload Section */}
+          <div className="add-shop-location-block">
+            <label className="section-label">Coordinates</label>
+            <p className="add-shop-coords-readout">
+              {effectiveCoords
+                ? `${effectiveCoords.lat.toFixed(6)}, ${effectiveCoords.lng.toFixed(6)}`
+                : "—"}
+            </p>
+            <p className="add-shop-coords-source">
+              {coordSource === "current" ? "Using device GPS" : hasMapLocation ? "Using selected map location" : "Set location from map or GPS"}
+            </p>
+            <div className="add-shop-location-chips">
+              <button
+                type="button"
+                className={`add-shop-loc-chip ${coordSource === "map" && hasMapLocation ? "add-shop-loc-chip--active" : ""}`}
+                disabled={!hasMapLocation || isSubmitting}
+                onClick={() => {
+                  setCoordSource("map");
+                  setGpsError(null);
+                }}
+              >
+                Use selected map location
+              </button>
+              <button
+                type="button"
+                className={`add-shop-loc-chip ${coordSource === "current" ? "add-shop-loc-chip--active" : ""}`}
+                disabled={isSubmitting || gpsLoading}
+                onClick={useCurrentLocation}
+              >
+                {gpsLoading ? "Getting location…" : "Use current location"}
+              </button>
+            </div>
+            {gpsError && <p className="add-shop-gps-error">{gpsError}</p>}
+          </div>
+
           <div className="image-upload-section">
             <label className="section-label">Shop Photo</label>
             <ImageUploader
@@ -139,7 +218,6 @@ export default function AddShopModal({
             />
           </div>
 
-          {/* Shop Name */}
           <div className="input-group">
             <label>Shop Name *</label>
             <input
@@ -153,7 +231,6 @@ export default function AddShopModal({
             />
           </div>
 
-          {/* Category */}
           <div className="input-group">
             <label>Category</label>
             <select
@@ -171,7 +248,6 @@ export default function AddShopModal({
             </select>
           </div>
 
-          {/* Description */}
           <div className="input-group">
             <label>Description</label>
             <textarea
@@ -184,7 +260,6 @@ export default function AddShopModal({
             />
           </div>
 
-          {/* Sales Details */}
           <div className="input-group">
             <label>Sales Details</label>
             <input
@@ -197,7 +272,6 @@ export default function AddShopModal({
             />
           </div>
 
-          {/* Notes */}
           <div className="input-group">
             <label>Notes</label>
             <textarea
@@ -210,41 +284,25 @@ export default function AddShopModal({
             />
           </div>
 
-          {/* Upload Progress */}
           {isSubmitting && uploadProgress > 0 && (
             <div className="upload-progress">
               <div className="progress-bar">
-                <div
-                  className="progress-fill"
-                  style={{ width: `${uploadProgress}%` }}
-                />
+                <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
               </div>
               <span className="progress-text">
-                {uploadProgress < 100
-                  ? `Uploading... ${uploadProgress}%`
-                  : "Processing AI embeddings..."}
+                {uploadProgress < 100 ? `Uploading... ${uploadProgress}%` : "Processing AI embeddings..."}
               </span>
             </div>
           )}
 
-          {/* Actions */}
           <div className="modal-actions">
-            <button
-              type="button"
-              className="btn btn-cancel"
-              onClick={onClose}
-              disabled={isSubmitting}
-            >
+            <button type="button" className="btn btn-cancel" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </button>
-            <button
-              type="submit"
-              className="btn btn-submit"
-              disabled={isSubmitting}
-            >
+            <button type="submit" className="btn btn-submit" disabled={isSubmitting}>
               {isSubmitting ? (
                 <>
-                  <span className="spinner-small-inline"></span>
+                  <span className="spinner-small-inline" />
                   Saving...
                 </>
               ) : (
