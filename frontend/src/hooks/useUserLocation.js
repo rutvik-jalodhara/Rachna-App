@@ -18,6 +18,8 @@ export function useUserLocation() {
   const [coords, setCoords] = useState(null);
   const [status, setStatus] = useState("idle");
   const [errorMessage, setErrorMessage] = useState(null);
+  /** Timestamp (ms) of last coords update — used to decide if a locate refresh is needed */
+  const [lastFixAt, setLastFixAt] = useState(null);
 
   const lastEmittedRef = useRef(null);
   const lastEmitTimeRef = useRef(0);
@@ -35,6 +37,7 @@ export function useUserLocation() {
     lastEmittedRef.current = { lat, lng };
     lastEmitTimeRef.current = now;
     setCoords({ lat, lng });
+    setLastFixAt(Date.now());
   }, []);
 
   useEffect(() => {
@@ -57,6 +60,7 @@ export function useUserLocation() {
       },
       (err) => {
         setCoords(null);
+        setLastFixAt(null);
         lastEmittedRef.current = null;
         if (err.code === 1) {
           setStatus("denied");
@@ -95,11 +99,13 @@ export function useUserLocation() {
         lastEmittedRef.current = { lat, lng };
         lastEmitTimeRef.current = Date.now();
         setCoords({ lat, lng });
+        setLastFixAt(Date.now());
         setStatus("ready");
         setErrorMessage(null);
       },
       (err) => {
         setCoords(null);
+        setLastFixAt(null);
         if (err.code === 1) {
           setStatus("denied");
           setErrorMessage("Location permission denied. Enable it in browser settings to see distances.");
@@ -115,5 +121,5 @@ export function useUserLocation() {
     );
   }, []);
 
-  return { coords, status, errorMessage, refresh };
+  return { coords, status, errorMessage, refresh, lastFixAt };
 }

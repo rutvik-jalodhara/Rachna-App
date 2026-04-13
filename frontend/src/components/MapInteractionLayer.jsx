@@ -2,11 +2,26 @@ import { useMap } from "react-leaflet";
 import { useEffect, useRef } from "react";
 
 const LONG_PRESS_MS = 620;
-const MOVE_PX = 14;
+/** Cancel long-press only if finger moves beyond this (slight jitter tolerance). */
+const MOVE_PX = 28;
 
 function isOverMarkerOrPopup(target) {
   if (!target || !target.closest) return false;
   return Boolean(target.closest(".leaflet-marker-icon") || target.closest(".leaflet-popup"));
+}
+
+/** Map UI that is not the map surface — ignore so we do not long-press / mis-handle taps. */
+function isOverMapChrome(target) {
+  if (!target || !target.closest) return false;
+  return Boolean(
+    target.closest(".leaflet-control") ||
+      target.closest(".leaflet-bar") ||
+      target.closest(".google-locate-btn") ||
+      target.closest(".scan-fab") ||
+      target.closest(".map-search-bar-wrap") ||
+      target.closest(".map-search-outer") ||
+      target.closest(".leaflet-popup")
+  );
 }
 
 /**
@@ -36,6 +51,7 @@ export default function MapInteractionLayer({ onTapMap, onLongPressMap }) {
 
     const onPointerDown = (ev) => {
       if (ev.pointerType === "mouse" && ev.button !== 0) return;
+      if (isOverMapChrome(ev.target)) return;
       if (isOverMarkerOrPopup(ev.target)) return;
 
       clearTimer();
@@ -67,7 +83,9 @@ export default function MapInteractionLayer({ onTapMap, onLongPressMap }) {
 
     const onMapClick = (e) => {
       if (Date.now() < suppressClickUntilRef.current) return;
-      if (isOverMarkerOrPopup(e.originalEvent?.target)) return;
+      const t = e.originalEvent?.target;
+      if (isOverMapChrome(t)) return;
+      if (isOverMarkerOrPopup(t)) return;
       onTapMap?.(e.latlng);
     };
 

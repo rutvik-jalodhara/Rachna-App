@@ -2,6 +2,8 @@
  * Nominatim + local helpers for map search.
  * Per https://operations.osmfoundation.org/policies/nominatim/ — identify app in requests.
  */
+import { haversineMeters } from "./geoDistance";
+
 const NOMINATIM = "https://nominatim.openstreetmap.org";
 const APP_CONTACT = "rachna-map-app@example.com";
 
@@ -104,6 +106,127 @@ export async function quickReverseLabel(lat, lng, { signal } = {}) {
   } catch {
     return "";
   }
+}
+
+/**
+ * Named POI from Overpass within ~radiusM (shop / amenity / tourism / historic / building).
+ */
+export async function nearbyNamedPoi(lat, lng, { signal, radiusM = 50 } = {}) {
+  const r = Math.max(20, Math.min(100, Math.round(radiusM)));
+  const query = `[out:json][timeout:12];(nwr["shop"](around:${r},${lat},${lng});nwr["amenity"](around:${r},${lat},${lng});nwr["tourism"](around:${r},${lat},${lng});nwr["historic"](around:${r},${lat},${lng});nwr["building"](around:${r},${lat},${lng}););out center;`;
+  try {
+    const overpassRes = await fetch(
+      `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`,
+      { signal }
+    );
+    if (!overpassRes.ok) return null;
+    const overpassData = await overpassRes.json();
+    const elements = overpassData?.elements ?? [];
+    const named = elements.filter((el) => el.tags?.name);
+    if (named.length === 0) return null;
+    let best = null;
+    let bestD = Infinity;
+    for (const el of named) {
+      const elLat = el.lat ?? el.center?.lat;
+      const elLng = el.lon ?? el.center?.lon;
+      if (elLat == null || elLng == null) continue;
+      const d = haversineMeters(lat, lng, elLat, elLng);
+      if (d < bestD && d <= radiusM + 25) {
+        bestD = d;
+        best = { name: el.tags.name, lat: elLat, lng: elLng };
+      }
+    }
+    return best;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reverse geocode + nearby Overpass POI in parallel; prefer POI name when one is close to the tap.
+ */
+export async function resolveMapTapLabel(lat, lng, { signal } = {}) {
+  const [poi, rev] = await Promise.all([
+    nearbyNamedPoi(lat, lng, { signal, radiusM: 52 }).catch(() => null),
+    nominatimReverse(lat, lng, { signal }).catch(() => null),
+  ]);
+  if (poi?.name) {
+    return { label: poi.name, lat: poi.lat, lng: poi.lng };
+  }
+  const addr = rev ? formatReverseResult(rev) : "";
+  let finalLat = lat;
+  let finalLng = lng;
+  if (rev?.lat != null && rev?.lon != null) {
+    finalLat = parseFloat(rev.lat);
+    finalLng = parseFloat(rev.lon);
+  }
+  return {
+    label: addr || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+    lat: finalLat,
+    lng: finalLng,
+  };
+}
+
+/** Prefer first Nominatim row with valid coordinates. */
+export function pickBestNominatimHit(list) {
+  if (!Array.isArray(list) || list.length === 0) return null;
+  for (const h of list) {
+    const lat = parseFloat(h.lat);
+    const lng = parseFloat(h.lon);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return h;
+  }
+  return list[0];
+}
+
+export function simplifySearchQuery(q) {
+  return String(q || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[,;\s.:]+|[,;\s.:]+$/g, "")
+    .trim();
+}
+
+/** Progressive shorter queries for retry (e.g. drop last word, strip after comma). */
+export function searchQueryVariants(primary) {
+  const variants = [];
+  const seen = new Set();
+  const add = (s) => {
+    const v = simplifySearchQuery(s);
+    if (v.length >= 2 && !seen.has(v.toLowerCase())) {
+      seen.add(v.toLowerCase());
+      variants.push(v);
+    }
+  };
+  add(primary);
+  const t = simplifySearchQuery(primary);
+  const parts = t.split(/\s+/).filter(Boolean);
+  for (let n = parts.length - 1; n >= 2; n--) {
+    add(parts.slice(0, n).join(" "));
+  }
+  const comma = t.indexOf(",");
+  if (comma > 0) add(t.slice(0, comma));
+  return variants;
+}
+
+/**
+ * Try Nominatim with original query, then simplified variants; returns best hit when possible.
+ */
+export async function nominatimSearchWithFallback(rawQuery, { signal, limit = 8 } = {}) {
+  const variants = searchQueryVariants(rawQuery);
+  let lastHits = [];
+  for (const q of variants) {
+    try {
+      const data = await nominatimSearch(q, { signal, limit });
+      lastHits = Array.isArray(data) ? data : [];
+      const hit = pickBestNominatimHit(lastHits);
+      if (hit) return { hit, queryUsed: q, allHits: lastHits };
+    } catch {
+      /* try next */
+    }
+  }
+  const fallback = pickBestNominatimHit(lastHits);
+  if (fallback) return { hit: fallback, queryUsed: variants[variants.length - 1] ?? rawQuery, allHits: lastHits };
+  return { hit: null, queryUsed: null, allHits: lastHits };
 }
 
 /**

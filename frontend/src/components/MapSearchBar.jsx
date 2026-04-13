@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { parseLatLngQuery, nominatimSearch, formatSearchHit } from "../utils/geocoding";
+import { parseLatLngQuery, nominatimSearch, nominatimSearchWithFallback, formatSearchHit } from "../utils/geocoding";
 import { haversineMeters, formatDistance } from "../utils/geoDistance";
 import { getRecentSearches, pushRecentSearch } from "../utils/recentSearches";
 
@@ -26,6 +26,17 @@ function HighlightLabel({ text, query }) {
   );
 }
 
+function pickNearestShop(shops, userCoords) {
+  if (!shops.length) return null;
+  if (shops.length === 1) return shops[0];
+  const scored = shops.map((s) => ({
+    shop: s,
+    d: distanceFromUser(userCoords, s.latitude, s.longitude) ?? 1e15,
+  }));
+  scored.sort((a, b) => a.d - b.d);
+  return scored[0].shop;
+}
+
 function MapSearchBar({
   shops = [],
   userCoords = null,
@@ -33,6 +44,7 @@ function MapSearchBar({
   onPickPlace,
   onPickShop,
   onPickCoords,
+  onSearchToast,
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -185,6 +197,87 @@ function MapSearchBar({
     []
   );
 
+  const commitSearch = useCallback(async () => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      onSearchToast?.("Enter a place or shop name", "warning");
+      return;
+    }
+
+    const parsed = parseLatLngQuery(trimmed);
+    if (parsed) {
+      const label = `${parsed.lat.toFixed(5)}, ${parsed.lng.toFixed(5)}`;
+      recordAndPick(label, () => {
+        onPickCoords?.({ ...parsed, label });
+        setQuery(label);
+        setOpen(false);
+        setOsmResults([]);
+        setError(null);
+      });
+      return;
+    }
+
+    const shopMatches = shopsHit;
+    if (shopMatches.length > 0) {
+      const best = pickNearestShop(shopMatches, userCoords);
+      if (best) {
+        recordAndPick(best.shop_name, () => {
+          onPickShop?.(best);
+          setQuery(best.shop_name);
+          setOpen(false);
+          setOsmResults([]);
+          setError(null);
+        });
+      }
+      return;
+    }
+
+    if (trimmed.length < 2) {
+      onSearchToast?.("Keep typing — at least 2 characters", "info");
+      return;
+    }
+
+    abortRef.current?.abort();
+    abortRef.current = new AbortController();
+    const { signal } = abortRef.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const { hit } = await nominatimSearchWithFallback(trimmed, { signal, limit: 10 });
+      if (hit) {
+        const lat = parseFloat(hit.lat);
+        const lng = parseFloat(hit.lon);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          const label = formatSearchHit(hit);
+          recordAndPick(label, () => {
+            onPickPlace?.({ lat, lng, label, raw: hit });
+            setQuery(label);
+            setOpen(false);
+            setOsmResults([]);
+          });
+          return;
+        }
+      }
+      setError("No results");
+      onSearchToast?.("No matching place found — try fewer words or a nearby town", "warning");
+    } catch (e) {
+      if (e.name === "AbortError") return;
+      setError("Search failed");
+      onSearchToast?.("Search failed. Check your connection and try again.", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    query,
+    shopsHit,
+    userCoords,
+    onPickCoords,
+    onPickShop,
+    onPickPlace,
+    recordAndPick,
+    onSearchToast,
+  ]);
+
   return (
     <div className="map-search-bar-wrap" ref={rootRef}>
       <div className={`google-search-bar map-search-bar ${open ? "map-search-bar--open" : ""}`}>
@@ -205,7 +298,24 @@ function MapSearchBar({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              commitSearch();
+            }
+          }}
         />
+        <button
+          type="button"
+          className="map-search-bar__submit"
+          onClick={() => commitSearch()}
+          title="Search"
+          aria-label="Search"
+        >
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="#5f6368" aria-hidden>
+            <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+          </svg>
+        </button>
         {query && (
           <button
             type="button"

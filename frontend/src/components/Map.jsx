@@ -18,7 +18,7 @@ import MapInteractionLayer from "./MapInteractionLayer";
 import MapFlyTo from "./MapFlyTo";
 import { useToast } from "./Toast";
 import { fetchShops, addShop, deleteShop as deleteShopApi } from "../hooks/useApi";
-import { quickReverseLabel, resolvePlaceAtLocation } from "../utils/geocoding";
+import { quickReverseLabel, resolvePlaceAtLocation, resolveMapTapLabel } from "../utils/geocoding";
 import { haversineMeters, formatDistance, formatApproxDriveEta, googleMapsDirectionsUrl } from "../utils/geoDistance";
 import { useUserLocation } from "../hooks/useUserLocation";
 
@@ -30,14 +30,20 @@ const liveUserIcon = L.divIcon({
   popupAnchor: [0, -9],
 });
 
-/** Blue dot for live GPS from useUserLocation (watch). */
-function LiveUserMarker({ userCoords }) {
+/** Blue dot for live GPS — tap opens Add Shop at current location. */
+function LiveUserMarker({ userCoords, onUserMarkerTap }) {
   if (!userCoords || !Number.isFinite(userCoords.lat) || !Number.isFinite(userCoords.lng)) return null;
   return (
     <Marker
       position={[userCoords.lat, userCoords.lng]}
       icon={liveUserIcon}
       zIndexOffset={1000}
+      eventHandlers={{
+        click: (e) => {
+          if (e.originalEvent) L.DomEvent.stopPropagation(e.originalEvent);
+          onUserMarkerTap?.();
+        },
+      }}
     />
   );
 }
@@ -46,66 +52,49 @@ function LiveUserMarker({ userCoords }) {
 // Center / locate controls (uses live userCoords when available)
 // ───────────────────────────────────────────
 
-function LocationControls({ userCoords }) {
+/** If GPS fix is older than this, prefer map.locate() to refresh instead of flying to stale coords. */
+const LOCATE_STALE_MS = 120_000;
+
+function LocationControls({ userCoords, lastFixAt }) {
   const locateRef = useRef(null);
-  const recenterRef = useRef(null);
 
   const map = useMap();
   useMapEvents({
     locationfound(e) {
-      map.flyTo(e.latlng, Math.max(map.getZoom(), 15), { duration: 0.65 });
+      map.flyTo(e.latlng, Math.max(map.getZoom(), 15), { duration: 0.55 });
     },
   });
 
   useEffect(() => {
-    [locateRef, recenterRef].forEach((r) => {
-      if (r.current) L.DomEvent.disableClickPropagation(r.current);
-    });
+    if (locateRef.current) L.DomEvent.disableClickPropagation(locateRef.current);
   }, []);
 
   const flyToUser = useCallback(() => {
-    if (userCoords && Number.isFinite(userCoords.lat) && Number.isFinite(userCoords.lng)) {
-      map.flyTo([userCoords.lat, userCoords.lng], Math.max(map.getZoom(), 15), { duration: 0.65 });
+    const hasCoords = userCoords && Number.isFinite(userCoords.lat) && Number.isFinite(userCoords.lng);
+    const fresh = lastFixAt != null && Date.now() - lastFixAt < LOCATE_STALE_MS;
+    if (hasCoords && fresh) {
+      map.flyTo([userCoords.lat, userCoords.lng], Math.max(map.getZoom(), 15), { duration: 0.55 });
       return;
     }
-    map.locate({ setView: true, maxZoom: 16 });
-  }, [map, userCoords]);
+    map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
+  }, [map, userCoords, lastFixAt]);
 
   return (
-    <>
-      <button
-        ref={locateRef}
-        className="google-locate-btn"
-        type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          flyToUser();
-        }}
-        title="Your location"
-      >
-        <svg focusable="false" viewBox="0 0 24 24" style={{ width: "24px", height: "24px", fill: "#666" }} aria-hidden>
-          <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
-        </svg>
-      </button>
-      {userCoords && (
-        <button
-          ref={recenterRef}
-          type="button"
-          className="map-recenter-btn"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            flyToUser();
-          }}
-          title="Recenter on you"
-        >
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="#666" aria-hidden>
-            <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
-          </svg>
-        </button>
-      )}
-    </>
+    <button
+      ref={locateRef}
+      className="google-locate-btn"
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        flyToUser();
+      }}
+      title="Your location"
+    >
+      <svg focusable="false" viewBox="0 0 24 24" style={{ width: "24px", height: "24px", fill: "#666" }} aria-hidden>
+        <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
+      </svg>
+    </button>
   );
 }
 
@@ -114,7 +103,7 @@ function LocationControls({ userCoords }) {
 // ───────────────────────────────────────────
 
 const selectionPinIcon = L.divIcon({
-  className: "map-selection-pin",
+  className: "map-selection-pin map-selection-pin--active",
   html: '<div class="map-selection-pin__inner"></div>',
   iconSize: [28, 36],
   iconAnchor: [14, 34],
@@ -123,7 +112,7 @@ const selectionPinIcon = L.divIcon({
 
 function Map() {
   const { showToast } = useToast();
-  const { coords: userCoords, status: locationStatus } = useUserLocation();
+  const { coords: userCoords, status: locationStatus, lastFixAt } = useUserLocation();
   const [shops, setShops] = useState([]);
   const [isEnriching, setIsEnriching] = useState(false);
   const [flyTo, setFlyTo] = useState(null);
@@ -223,14 +212,20 @@ function Map() {
       tapAbortRef.current?.abort();
       tapAbortRef.current = new AbortController();
       const { signal } = tapAbortRef.current;
-      const label = await quickReverseLabel(lat, lng, { signal });
+      const resolved = await resolveMapTapLabel(lat, lng, { signal });
+      if (signal.aborted) return;
       setSelectionPoint((prev) => {
         if (!prev || prev.lat !== lat || prev.lng !== lng) return prev;
         return {
-          lat,
-          lng,
-          label: label || `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+          lat: resolved.lat,
+          lng: resolved.lng,
+          label: resolved.label,
         };
+      });
+      setFlyTo({
+        center: [resolved.lat, resolved.lng],
+        zoom: Math.max(15, 16),
+        key: Date.now(),
       });
     },
     []
@@ -284,6 +279,31 @@ function Map() {
     setFlyTo({ center: [coords.lat, coords.lng], zoom: 16, key: Date.now() });
   }, []);
 
+  const openAddShopAtSelection = useCallback(() => {
+    const lat = selectionShop?.latitude ?? selectionPoint?.lat;
+    const lng = selectionShop?.longitude ?? selectionPoint?.lng;
+    if (lat == null || lng == null) return;
+    setSelectedLocation({ lat, lng });
+    const fromPoint = selectionPoint?.label && selectionPoint.label !== "…" ? selectionPoint.label : "";
+    setDetectedName(selectionShop ? "" : fromPoint);
+    setAddModalOpen(true);
+    setSheetOpen(false);
+  }, [selectionShop, selectionPoint]);
+
+  const handleUserMarkerTap = useCallback(async () => {
+    if (!userCoords) return;
+    clearMapSelection();
+    setSelectedLocation({ lat: userCoords.lat, lng: userCoords.lng });
+    setDetectedName("");
+    setAddModalOpen(true);
+    try {
+      const name = await quickReverseLabel(userCoords.lat, userCoords.lng);
+      if (name) setDetectedName(name);
+    } catch {
+      /* ignore */
+    }
+  }, [userCoords, clearMapSelection]);
+
   const createCustomIcon = useCallback((shop, isSelected) => {
     const sel = isSelected ? " marker-pin--selected" : "";
     if (shop.image_url) {
@@ -318,13 +338,6 @@ function Map() {
   const sheetTitle = selectionShop
     ? selectionShop.shop_name || "Shop"
     : selectionPoint?.label || "Location";
-
-  const sheetSubtitle = selectionShop
-    ? [selectionShop.category, selectionShop.description].filter(Boolean).join(" · ") ||
-      `${selectionShop.latitude?.toFixed(5)}, ${selectionShop.longitude?.toFixed(5)}`
-    : selectionPoint
-      ? `${selectionPoint.lat.toFixed(5)}, ${selectionPoint.lng.toFixed(5)}`
-      : "";
 
   const directionsLat = selectionShop ? selectionShop.latitude : selectionPoint?.lat;
   const directionsLng = selectionShop ? selectionShop.longitude : selectionPoint?.lng;
@@ -368,6 +381,7 @@ function Map() {
           onPickPlace={handleSearchPlace}
           onPickShop={handleSearchShop}
           onPickCoords={handleSearchCoords}
+          onSearchToast={showToast}
         />
       </div>
 
@@ -378,13 +392,19 @@ function Map() {
         <span className="scan-fab-label">Scan</span>
       </button>
 
-      <MapContainer center={[23.0225, 72.5714]} zoom={13} zoomControl={false} style={{ height: "100%", width: "100%", zIndex: 1 }}>
+      <MapContainer
+        center={[23.0225, 72.5714]}
+        zoom={13}
+        zoomControl={false}
+        tap={true}
+        style={{ height: "100%", width: "100%", zIndex: 1 }}
+      >
         <TileLayer attribution="&copy; Google Maps" url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}" />
         <ZoomControl position="bottomright" />
         <MapFlyTo target={flyTo} />
         <MapInteractionLayer onTapMap={handleTapMap} onLongPressMap={handleLongPressMap} />
-        <LiveUserMarker userCoords={userCoords} />
-        <LocationControls userCoords={userCoords} />
+        <LiveUserMarker userCoords={userCoords} onUserMarkerTap={handleUserMarkerTap} />
+        <LocationControls userCoords={userCoords} lastFixAt={lastFixAt} />
 
         <LayerGroup>
           {validShops.map((shop, index) => (
@@ -416,24 +436,10 @@ function Map() {
       <MapActionSheet
         isOpen={sheetOpen && (selectionShop || selectionPoint)}
         title={sheetTitle}
-        subtitle={sheetSubtitle}
         distanceLabel={sheetDistanceLabel}
         etaLabel={sheetEtaLabel}
-        isShop={Boolean(selectionShop)}
         onClose={clearMapSelection}
-        onViewShop={() => {
-          if (!selectionShop) return;
-          setDetailShop(selectionShop);
-          setDetailModalOpen(true);
-          clearMapSelection();
-        }}
-        onAddShop={() => {
-          if (!selectionPoint) return;
-          setSelectedLocation({ lat: selectionPoint.lat, lng: selectionPoint.lng });
-          setDetectedName(selectionPoint.label && selectionPoint.label !== "…" ? selectionPoint.label : "");
-          setAddModalOpen(true);
-          setSheetOpen(false);
-        }}
+        onAddShop={openAddShopAtSelection}
         onDirections={() => {
           if (directionsLat == null || directionsLng == null) return;
           window.open(googleMapsDirectionsUrl(directionsLat, directionsLng), "_blank", "noopener,noreferrer");
@@ -442,16 +448,6 @@ function Map() {
           if (directionsLat == null || directionsLng == null) return;
           window.open(googleMapsDirectionsUrl(directionsLat, directionsLng, { driving: true }), "_blank", "noopener,noreferrer");
         }}
-        onDelete={
-          selectionShop
-            ? () => {
-                if (window.confirm(`Delete "${selectionShop.shop_name}"?`)) {
-                  handleDeleteShop(selectionShop._id);
-                  clearMapSelection();
-                }
-              }
-            : undefined
-        }
       />
 
       <AddShopModal

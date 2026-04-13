@@ -1669,6 +1669,27 @@ img {
   flex-shrink: 0;
 }
 
+.map-search-bar__submit {
+  border: none;
+  background: rgba(108, 92, 231, 0.12);
+  color: var(--primary-dark);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: transform 0.12s ease, background 0.15s ease;
+}
+
+.map-search-bar__submit:active {
+  transform: scale(0.94);
+  background: rgba(108, 92, 231, 0.22);
+}
+
 .map-search-suggestions {
   position: absolute;
   top: calc(100% + 6px);
@@ -1814,6 +1835,10 @@ img {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+.map-action-sheet__actions--minimal {
+  gap: var(--space-3);
 }
 
 .map-action-sheet__btn {
@@ -2056,6 +2081,22 @@ img {
   margin: 4px auto;
 }
 
+@keyframes selectionPinPulse {
+  0%,
+  100% {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    transform: rotate(-45deg) scale(1);
+  }
+  50% {
+    box-shadow: 0 4px 18px rgba(108, 92, 231, 0.5);
+    transform: rotate(-45deg) scale(1.08);
+  }
+}
+
+.map-selection-pin--active .map-selection-pin__inner {
+  animation: selectionPinPulse 1.25s ease-in-out infinite;
+}
+
 .marker-pin--selected {
   box-shadow: 0 0 0 4px rgba(108, 92, 231, 0.95);
 }
@@ -2086,34 +2127,6 @@ img {
 
 .google-locate-btn:hover {
   background: #f8f9fa;
-}
-
-.map-recenter-btn {
-  position: absolute;
-  bottom: calc(
-    var(--map-ui-bottom) + var(--map-zoom-stack-height) + var(--map-locate-above-zoom-gap) + 48px
-  );
-  right: max(var(--space-2), env(safe-area-inset-right, 0px));
-  z-index: var(--z-map-ui);
-  background: white;
-  width: 40px;
-  height: 40px;
-  border-radius: 4px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  border: none;
-  transition: background 0.2s, transform 0.15s ease;
-}
-
-.map-recenter-btn:hover {
-  background: #f8f9fa;
-}
-
-.map-recenter-btn:active {
-  transform: scale(0.96);
 }
 
 /* ─── Loader Overlay ─── */
