@@ -83,7 +83,7 @@ export default function MapInteractionLayer({ onTapMap, onLongPressMap }) {
       const t = e.originalEvent?.target;
       if (isOverMapChrome(t)) return;
       if (isOverMarkerOrPopup(t)) return;
-      onTapMap?.(e.latlng);
+      onTapMap?.(e.latlng, { zoom: map.getZoom() });
     };
 
     el.addEventListener("pointerdown", onPointerDown);

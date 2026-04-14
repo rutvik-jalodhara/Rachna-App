@@ -15,6 +15,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Routes
 app.use("/api/shops", require("./routes/shopRoutes"));
+app.use("/api/places", require("./routes/placesRoutes"));
 
 // Health check
 app.get("/api/health", (req, res) => {

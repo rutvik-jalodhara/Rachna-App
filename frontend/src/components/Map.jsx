@@ -127,6 +127,39 @@ const selectionPinIconPoi = L.divIcon({
 /** Only re-center map after resolve if POI/reverse moved the pin enough (reduces flicker). */
 const TAP_RESOLVE_FLY_MIN_M = 35;
 
+function interpolateTapResolveWindow(zoom) {
+  if (!Number.isFinite(zoom)) {
+    return {
+      searchRadiusM: MAP_CONFIG.POI_TAP_SEARCH_RADIUS_METERS,
+      snapMaxMeters: MAP_CONFIG.POI_SNAP_MAX_METERS_FROM_TAP,
+    };
+  }
+  const zLow = MAP_CONFIG.POI_TAP_ZOOM_LOW;
+  const zHigh = MAP_CONFIG.POI_TAP_ZOOM_HIGH;
+  if (zoom <= zLow) {
+    return {
+      searchRadiusM: MAP_CONFIG.POI_TAP_SEARCH_RADIUS_LOW_ZOOM_METERS,
+      snapMaxMeters: MAP_CONFIG.POI_SNAP_MAX_FROM_TAP_LOW_ZOOM_METERS,
+    };
+  }
+  if (zoom >= zHigh) {
+    return {
+      searchRadiusM: MAP_CONFIG.POI_TAP_SEARCH_RADIUS_METERS,
+      snapMaxMeters: MAP_CONFIG.POI_SNAP_MAX_METERS_FROM_TAP,
+    };
+  }
+  const t = (zoom - zLow) / (zHigh - zLow);
+  const lerp = (a, b) => a + (b - a) * t;
+  return {
+    searchRadiusM: Math.round(
+      lerp(MAP_CONFIG.POI_TAP_SEARCH_RADIUS_LOW_ZOOM_METERS, MAP_CONFIG.POI_TAP_SEARCH_RADIUS_METERS)
+    ),
+    snapMaxMeters: Math.round(
+      lerp(MAP_CONFIG.POI_SNAP_MAX_FROM_TAP_LOW_ZOOM_METERS, MAP_CONFIG.POI_SNAP_MAX_METERS_FROM_TAP)
+    ),
+  };
+}
+
 function Map() {
   const { showToast } = useToast();
   const { coords: userCoords, status: locationStatus, lastFixAt } = useUserLocation();
@@ -220,9 +253,10 @@ function Map() {
   }, []);
 
   const handleTapMap = useCallback(
-    async (latlng) => {
+    async (latlng, tapMeta = {}) => {
       const { lat, lng } = latlng;
       const seq = ++tapResolutionSeqRef.current;
+      const resolveWindow = interpolateTapResolveWindow(tapMeta.zoom);
 
       setSelectionShop(null);
       setSelectionPoint({
@@ -241,11 +275,16 @@ function Map() {
       tapAbortRef.current = new AbortController();
       const { signal } = tapAbortRef.current;
 
-      const resolved = await resolveMapTapLabel(lat, lng, { signal });
+      const resolved = await resolveMapTapLabel(lat, lng, {
+        signal,
+        searchRadiusM: resolveWindow.searchRadiusM,
+        snapMaxMeters: resolveWindow.snapMaxMeters,
+      });
       if (signal.aborted || seq !== tapResolutionSeqRef.current) return;
 
       const movedM = haversineMeters(lat, lng, resolved.lat, resolved.lng);
-      if (movedM >= TAP_RESOLVE_FLY_MIN_M) {
+      const shouldFly = resolved.source === "poi" ? movedM > 0 : movedM >= TAP_RESOLVE_FLY_MIN_M;
+      if (shouldFly) {
         setFlyTo({
           center: [resolved.lat, resolved.lng],
           zoom: Math.max(15, 16),

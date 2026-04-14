@@ -7,6 +7,10 @@ import { haversineMeters } from "./geoDistance";
 
 const NOMINATIM = "https://nominatim.openstreetmap.org";
 const APP_CONTACT = "rachna-map-app@example.com";
+const API_BASE =
+  typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+    ? "http://localhost:5000"
+    : "https://rachna-app.onrender.com";
 const POI_LABEL_TAG_PRIORITY = [
   "amenity",
   "shop",
@@ -184,11 +188,7 @@ export async function resolveMapTapLabel(
   const snapMax = snapMaxMeters;
 
   const [poi, rev] = await Promise.all([
-    nearbyNamedPoi(lat, lng, {
-      signal,
-      radiusM: searchR,
-      maxSnapMeters: snapMax,
-    }).catch(() => null),
+    googlePlacesNearbyPoi(lat, lng, { signal, radiusM: searchR, snapMaxMeters: snapMax }).catch(() => null),
     nominatimReverse(lat, lng, { signal }).catch(() => null),
   ]);
 
@@ -214,6 +214,23 @@ export async function resolveMapTapLabel(
     lng,
     source: "unknown",
   };
+}
+
+async function googlePlacesNearbyPoi(lat, lng, { signal, radiusM, snapMaxMeters } = {}) {
+  const radius = Math.max(25, Math.min(2000, Math.round(Number(radiusM) || 250)));
+  const url = `${API_BASE}/api/places/nearby?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(
+    lng
+  )}&radius=${encodeURIComponent(radius)}`;
+  const res = await fetch(url, { signal, headers: { Accept: "application/json" } });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const best = data?.best;
+  if (!best?.name || best?.lat == null || best?.lng == null) return null;
+  // Enforce snap max distance from tap (frontend-side safety).
+  const d = haversineMeters(lat, lng, best.lat, best.lng);
+  const max = Number.isFinite(snapMaxMeters) ? snapMaxMeters : MAP_CONFIG.POI_SNAP_MAX_METERS_FROM_TAP;
+  if (Number.isFinite(max) && d > max) return null;
+  return { name: String(best.name), lat: Number(best.lat), lng: Number(best.lng) };
 }
 
 /** Prefer first Nominatim row with valid coordinates. */

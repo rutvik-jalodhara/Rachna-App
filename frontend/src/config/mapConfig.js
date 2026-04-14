@@ -9,6 +9,12 @@ export const MAP_CONFIG = {
   POI_TAP_SEARCH_RADIUS_METERS: 130,
   /** Max haversine distance from tap to still snap selection to a POI candidate (meters). */
   POI_SNAP_MAX_METERS_FROM_TAP: 180,
+  /** At lower zoom levels, expand POI lookup window so map-icon taps still resolve to the icon target. */
+  POI_TAP_SEARCH_RADIUS_LOW_ZOOM_METERS: 600,
+  POI_SNAP_MAX_FROM_TAP_LOW_ZOOM_METERS: 800,
+  /** Zoom range used to interpolate between low-zoom and default tap POI windows. */
+  POI_TAP_ZOOM_LOW: 12,
+  POI_TAP_ZOOM_HIGH: 17,
   /** Extra meters beyond POI_RADIUS_METERS — max haversine from tap to accept a matched POI. */
   POI_PREFER_DISTANCE_METERS: 30,
   /** If GPS fix is older than this, the locate button calls map.locate() instead of flying to cached coords. */
