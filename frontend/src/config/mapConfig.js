@@ -5,10 +5,10 @@
 export const MAP_CONFIG = {
   /** Overpass `around:` radius (m) for named POI lookup on map tap. */
   POI_RADIUS_METERS: 50,
-  /** Wider Overpass search on tap (meters) — improves match to visible map labels vs raw tap. */
-  POI_TAP_SEARCH_RADIUS_METERS: 72,
-  /** Max haversine distance from tap to still snap selection to a named POI (meters). */
-  POI_SNAP_MAX_METERS_FROM_TAP: 95,
+  /** Wider Overpass search on tap (meters) — helps catch map POI icons even if tapped slightly off-center. */
+  POI_TAP_SEARCH_RADIUS_METERS: 130,
+  /** Max haversine distance from tap to still snap selection to a POI candidate (meters). */
+  POI_SNAP_MAX_METERS_FROM_TAP: 180,
   /** Extra meters beyond POI_RADIUS_METERS — max haversine from tap to accept a matched POI. */
   POI_PREFER_DISTANCE_METERS: 30,
   /** If GPS fix is older than this, the locate button calls map.locate() instead of flying to cached coords. */
@@ -32,6 +32,10 @@ export const MAP_CONFIG = {
   RESOLVE_PLACE_OVERPASS_TIMEOUT_SEC: 10,
   /** Min movement (m) before emitting a new position from watchPosition. */
   USER_LOCATION_MIN_MOVE_M: 10,
+  /** Additional anti-jitter floor (m) when browser-reported GPS accuracy is poor. */
+  USER_LOCATION_ACCURACY_JITTER_FACTOR: 0.55,
+  /** Cap for accuracy-derived jitter threshold (m). */
+  USER_LOCATION_ACCURACY_JITTER_CAP_M: 28,
   /** Min time (ms) between emissions when movement is small. */
   USER_LOCATION_MIN_INTERVAL_MS: 3_500,
   USER_LOCATION_MAXIMUM_AGE_MS: 8_000,

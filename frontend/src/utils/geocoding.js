@@ -7,6 +7,15 @@ import { haversineMeters } from "./geoDistance";
 
 const NOMINATIM = "https://nominatim.openstreetmap.org";
 const APP_CONTACT = "rachna-map-app@example.com";
+const POI_LABEL_TAG_PRIORITY = [
+  "amenity",
+  "shop",
+  "tourism",
+  "leisure",
+  "office",
+  "healthcare",
+  "building",
+];
 
 function nominatimParams(extra = {}) {
   const p = new URLSearchParams({ format: "json", ...extra, email: APP_CONTACT });
@@ -127,18 +136,19 @@ export async function nearbyNamedPoi(
     if (!overpassRes.ok) return null;
     const overpassData = await overpassRes.json();
     const elements = overpassData?.elements ?? [];
-    const named = elements.filter((el) => el.tags?.name);
-    if (named.length === 0) return null;
+    if (elements.length === 0) return null;
     let best = null;
     let bestD = Infinity;
-    for (const el of named) {
+    for (const el of elements) {
       const elLat = el.lat ?? el.center?.lat;
       const elLng = el.lon ?? el.center?.lon;
       if (elLat == null || elLng == null) continue;
+      const label = derivePoiLabel(el.tags);
+      if (!label) continue;
       const d = haversineMeters(lat, lng, elLat, elLng);
       if (d < bestD && d <= maxAcceptM) {
         bestD = d;
-        best = { name: el.tags.name, lat: elLat, lng: elLng };
+        best = { name: label, lat: elLat, lng: elLng };
       }
     }
     return best;
@@ -147,14 +157,31 @@ export async function nearbyNamedPoi(
   }
 }
 
+function derivePoiLabel(tags = {}) {
+  if (tags?.name) return tags.name;
+  for (const key of POI_LABEL_TAG_PRIORITY) {
+    const raw = tags?.[key];
+    if (!raw) continue;
+    return String(raw)
+      .split(";")[0]
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  return "";
+}
+
 /**
  * Reverse geocode + nearby Overpass POI in parallel.
  * Prefer nearest named POI within snap distance; else reverse label; else "Unknown location".
  * @returns {{ label: string, lat: number, lng: number, source: 'poi' | 'reverse' | 'unknown' }}
  */
-export async function resolveMapTapLabel(lat, lng, { signal } = {}) {
-  const searchR = MAP_CONFIG.POI_TAP_SEARCH_RADIUS_METERS;
-  const snapMax = MAP_CONFIG.POI_SNAP_MAX_METERS_FROM_TAP;
+export async function resolveMapTapLabel(
+  lat,
+  lng,
+  { signal, searchRadiusM = MAP_CONFIG.POI_TAP_SEARCH_RADIUS_METERS, snapMaxMeters = MAP_CONFIG.POI_SNAP_MAX_METERS_FROM_TAP } = {}
+) {
+  const searchR = searchRadiusM;
+  const snapMax = snapMaxMeters;
 
   const [poi, rev] = await Promise.all([
     nearbyNamedPoi(lat, lng, {

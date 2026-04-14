@@ -453,11 +453,22 @@ function Map() {
       <MapContainer
         center={[23.0225, 72.5714]}
         zoom={13}
+        minZoom={2}
         zoomControl={false}
         tap={true}
+        worldCopyJump={false}
+        maxBounds={[
+          [-85, -180],
+          [85, 180],
+        ]}
+        maxBoundsViscosity={1.0}
         style={{ height: "100%", width: "100%", zIndex: 1 }}
       >
-        <TileLayer attribution="&copy; Google Maps" url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}" />
+        <TileLayer
+          attribution='&copy; <a href="https://www.google.com/maps">Google</a> satellite'
+          url="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+          noWrap
+        />
         <ZoomControl position="bottomright" />
         <MapFlyTo target={flyTo} />
         <MapInteractionLayer onTapMap={handleTapMap} onLongPressMap={handleLongPressMap} />

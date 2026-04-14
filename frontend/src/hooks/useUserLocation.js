@@ -24,13 +24,20 @@ export function useUserLocation() {
   const lastEmittedRef = useRef(null);
   const lastEmitTimeRef = useRef(0);
 
-  const emitPosition = useCallback((lat, lng) => {
+  const emitPosition = useCallback((lat, lng, accuracyM = 0) => {
     const now = Date.now();
     const prev = lastEmittedRef.current;
     if (prev) {
       const moved = haversineMeters(prev.lat, prev.lng, lat, lng);
       const elapsed = now - lastEmitTimeRef.current;
-      if (moved < MAP_CONFIG.USER_LOCATION_MIN_MOVE_M && elapsed < MAP_CONFIG.USER_LOCATION_MIN_INTERVAL_MS) {
+      const accuracyDerivedThreshold = Number.isFinite(accuracyM) && accuracyM > 0
+        ? Math.min(
+            MAP_CONFIG.USER_LOCATION_ACCURACY_JITTER_CAP_M,
+            accuracyM * MAP_CONFIG.USER_LOCATION_ACCURACY_JITTER_FACTOR
+          )
+        : 0;
+      const minMoveThreshold = Math.max(MAP_CONFIG.USER_LOCATION_MIN_MOVE_M, accuracyDerivedThreshold);
+      if (moved < minMoveThreshold && elapsed < MAP_CONFIG.USER_LOCATION_MIN_INTERVAL_MS) {
         return;
       }
     }
@@ -54,7 +61,8 @@ export function useUserLocation() {
       (pos) => {
         const lat = pos.coords.latitude;
         const lng = pos.coords.longitude;
-        emitPosition(lat, lng);
+        const accuracy = pos.coords.accuracy;
+        emitPosition(lat, lng, accuracy);
         setStatus("ready");
         setErrorMessage(null);
       },

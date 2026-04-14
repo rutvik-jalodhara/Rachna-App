@@ -7,7 +7,9 @@ function App() {
     <ToastProvider>
       <div className="app-shell">
         <header className="app-header">
-          <img src="/resources/favicon.png" alt="Logo" className="app-logo" />
+          <span className="app-logo-wrap" aria-hidden="true">
+            <img src="/resources/favicon.png" alt="" className="app-logo" width="36" height="36" decoding="async" />
+          </span>
           <h2 className="app-title">Rachna Map App</h2>
           <span className="app-badge">AI</span>
         </header>
