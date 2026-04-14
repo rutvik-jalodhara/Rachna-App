@@ -167,6 +167,80 @@ body {
   margin-bottom: 0 !important;
 }
 
+/* ───────────────────────────────────────────
+   Leaflet controls — professional dark glass
+   (Zoom +/–, attribution) to match header/search
+   ─────────────────────────────────────────── */
+
+.map-root .leaflet-control {
+  font-family: inherit;
+}
+
+.map-root .leaflet-bar {
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  background: rgba(22, 25, 32, 0.92) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+}
+
+.map-root .leaflet-bar a {
+  width: 40px !important;
+  height: 40px !important;
+  line-height: 40px !important;
+  background: transparent !important;
+  color: rgba(232, 234, 237, 0.9) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  font-size: 18px;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.map-root .leaflet-bar a:last-child {
+  border-bottom: none !important;
+}
+
+.map-root .leaflet-bar a:hover {
+  background: rgba(108, 92, 231, 0.18) !important;
+  color: #ffffff !important;
+}
+
+.map-root .leaflet-bar a:active {
+  background: rgba(108, 92, 231, 0.28) !important;
+}
+
+.map-root .leaflet-bar a.leaflet-disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+}
+
+.map-root .leaflet-control-zoom {
+  margin-bottom: 0 !important;
+}
+
+.map-root .leaflet-control-attribution {
+  background: rgba(22, 25, 32, 0.72) !important;
+  color: rgba(232, 234, 237, 0.7) !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  padding: 4px 8px !important;
+  margin: 0 0 8px 0 !important;
+}
+
+.map-root .leaflet-control-attribution a {
+  color: rgba(162, 155, 254, 0.95) !important;
+  text-decoration: none;
+}
+
+.map-root .leaflet-control-attribution a:hover {
+  text-decoration: underline;
+}
+
 img {
   max-width: 100%;
   height: auto;
@@ -2277,21 +2351,23 @@ img {
   );
   right: max(var(--space-2), env(safe-area-inset-right, 0px));
   z-index: var(--z-map-ui);
-  background: white;
+  background: rgba(22, 25, 32, 0.92);
   width: 40px;
   height: 40px;
-  border-radius: 4px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
   display: flex;
   justify-content: center;
   align-items: center;
   cursor: pointer;
-  border: none;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
   transition: background 0.2s;
 }
 
 .google-locate-btn:hover {
-  background: #f8f9fa;
+  background: rgba(108, 92, 231, 0.18);
 }
 
 /* ─── Loader Overlay ─── */
