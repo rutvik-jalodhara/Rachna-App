@@ -57,10 +57,16 @@ function LocationControls({ userCoords, lastFixAt }) {
   const map = useMap();
   const flyToUserRef = useRef(null);
   const controlRef = useRef(null);
+  const locatingSeqRef = useRef(0);
 
   useMapEvents({
     locationfound(e) {
-      map.flyTo(e.latlng, Math.max(map.getZoom(), 15), { duration: 0.55 });
+      // Avoid "shake": when locate() is requested we animate exactly once here.
+      // Some browsers emit multiple locationfound events; only animate for the latest request.
+      const seq = locatingSeqRef.current;
+      if (!seq) return;
+      locatingSeqRef.current = 0;
+      map.flyTo(e.latlng, Math.max(map.getZoom(), 15), { duration: 0.55, animate: true });
     },
   });
 
@@ -68,10 +74,13 @@ function LocationControls({ userCoords, lastFixAt }) {
     const hasCoords = userCoords && Number.isFinite(userCoords.lat) && Number.isFinite(userCoords.lng);
     const fresh = lastFixAt != null && Date.now() - lastFixAt < MAP_CONFIG.LOCATION_STALE_MS;
     if (hasCoords && fresh) {
-      map.flyTo([userCoords.lat, userCoords.lng], Math.max(map.getZoom(), 15), { duration: 0.55 });
+      locatingSeqRef.current = 0;
+      map.flyTo([userCoords.lat, userCoords.lng], Math.max(map.getZoom(), 15), { duration: 0.55, animate: true });
       return;
     }
-    map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
+    // Do not let locate() auto-pan; we will animate in locationfound once.
+    locatingSeqRef.current = Date.now();
+    map.locate({ setView: false, maxZoom: 16, enableHighAccuracy: true });
   }, [map, userCoords, lastFixAt]);
 
   useEffect(() => {
