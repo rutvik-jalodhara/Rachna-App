@@ -9,7 +9,7 @@ import React from "react";
  *   - onClose: () => void
  *   - onDelete: (id) => void
  */
-export default function ShopDetailModal({ shop, isOpen, onClose, onDelete }) {
+export default function ShopDetailModal({ shop, isOpen, onClose, onDelete, showDelete = true }) {
   if (!isOpen || !shop) return null;
 
   const initial = shop.shop_name?.charAt(0)?.toUpperCase() || "?";
@@ -103,11 +103,13 @@ export default function ShopDetailModal({ shop, isOpen, onClose, onDelete }) {
             )}
 
             {/* Actions */}
-            <div className="detail-actions">
-              <button className="btn btn-delete" onClick={handleDelete}>
-                Delete Shop
-              </button>
-            </div>
+            {showDelete && (
+              <div className="detail-actions">
+                <button className="btn btn-delete" onClick={handleDelete}>
+                  Delete Shop
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>

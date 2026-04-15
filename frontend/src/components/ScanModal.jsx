@@ -1,8 +1,9 @@
 import React, { useRef, useState, useCallback, useMemo } from "react";
 import { compressImage, fileToDataUrl } from "../utils/imageUtils";
-import { scanShop } from "../hooks/useApi";
+import { fetchShopById, scanShop } from "../hooks/useApi";
 import { useToast } from "./Toast";
 import { haversineMeters, formatDistance, formatApproxDriveEta, googleMapsDirectionsUrl } from "../utils/geoDistance";
+import ShopDetailModal from "./ShopDetailModal";
 
 function shopLatLng(shop) {
   const lat = shop?.latitude ?? shop?.lat;
@@ -29,12 +30,16 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
   const [previewUrl, setPreviewUrl] = useState(null);
   const [scanResult, setScanResult] = useState(null);
   const [scanError, setScanError] = useState(null);
+  const [detailShop, setDetailShop] = useState(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const reset = useCallback(() => {
     setStage("idle");
     setPreviewUrl(null);
     setScanResult(null);
     setScanError(null);
+    setDetailShop(null);
+    setDetailOpen(false);
   }, []);
 
   const handleFile = useCallback(
@@ -88,10 +93,20 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
     e.target.value = "";
   };
 
-  const handleMatchClick = (shop) => {
-    onMatchFound?.(shop);
-    onClose();
-    reset();
+  const handleMatchClick = async (shop) => {
+    try {
+      const id = shop?._id || shop?.shop_id;
+      if (!id) return;
+      const full = await fetchShopById(id);
+      setDetailShop({
+        ...full,
+        score: shop?.score ?? full?.score,
+      });
+      setDetailOpen(true);
+    } catch (err) {
+      console.error("Open shop detail error:", err);
+      showToast("Failed to open shop details", "error");
+    }
   };
 
   const handleClose = () => {
@@ -115,12 +130,6 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
     const ll = shopLatLng(shop);
     if (!ll) return;
     window.open(googleMapsDirectionsUrl(ll.lat, ll.lng), "_blank", "noopener,noreferrer");
-  };
-
-  const openStartForShop = (shop) => {
-    const ll = shopLatLng(shop);
-    if (!ll) return;
-    window.open(googleMapsDirectionsUrl(ll.lat, ll.lng, { driving: true }), "_blank", "noopener,noreferrer");
   };
 
   if (!isOpen) return null;
@@ -308,16 +317,6 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
                       >
                         Directions
                       </button>
-                      <button
-                        type="button"
-                        className="btn btn-submit scan-nav-actions__btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openStartForShop(scanResult.bestMatch);
-                        }}
-                      >
-                        Start
-                      </button>
                     </div>
                   </div>
                   <svg viewBox="0 0 24 24" width="24" height="24" fill="#6c5ce7" className="match-arrow">
@@ -363,11 +362,6 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
                   </button>
                 </div>
 
-                {scanResult.processingTime && (
-                  <p className="scan-time">
-                    Processed in {(scanResult.processingTime / 1000).toFixed(1)}s
-                  </p>
-                )}
               </div>
             ) : (
               /* No match */
@@ -414,11 +408,6 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
                   </button>
                 </div>
 
-                {scanResult?.processingTime && (
-                  <p className="scan-time">
-                    Processed in {(scanResult.processingTime / 1000).toFixed(1)}s
-                  </p>
-                )}
               </div>
             )}
           </div>
@@ -440,6 +429,15 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
         accept="image/jpeg,image/png,image/webp"
         onChange={handleFileInput}
         style={{ display: "none" }}
+      />
+
+      <ShopDetailModal
+        shop={detailShop}
+        isOpen={detailOpen}
+        onClose={() => {
+          setDetailOpen(false);
+        }}
+        showDelete={false}
       />
     </div>
   );

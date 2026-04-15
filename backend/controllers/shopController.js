@@ -193,9 +193,38 @@ exports.scanShop = async (req, res) => {
     const processingTime = Date.now() - startTime;
     console.log(`[SCAN] Completed in ${processingTime}ms`);
 
+    const toClientMatch = (m) => ({
+      shop_id: m.shop_id,
+      shop_name: m.shop_name,
+      image_url: m.image_url,
+      score: m.score,
+      confidence: m.confidence,
+      rank: m.rank,
+    });
+
+    // Keep "other possibilities" strict so users don't see unrelated near-100% candidates.
+    const pickMeaningfulAlternatives = (allMatches, primary) => {
+      if (!Array.isArray(allMatches) || allMatches.length <= 1) return [];
+      const top = Number(primary?.score ?? allMatches[0]?.score ?? 0);
+      if (!Number.isFinite(top) || top <= 0) return [];
+
+      return allMatches
+        .slice(1)
+        .filter((m) => {
+          if (!m || !Number.isFinite(m.score)) return false;
+          const delta = top - m.score;
+          // Must be close enough to top and still above a floor.
+          return delta <= 0.02 && m.score >= 0.8;
+        })
+        .slice(0, 2);
+    };
+
     if (bestMatch) {
       // Fetch full shop details for the best match
       const fullShop = await Shop.findById(bestMatch.shop_id).lean();
+      const alternatives = bestMatch.ambiguousTop
+        ? pickMeaningfulAlternatives(matches, bestMatch)
+        : [];
 
       res.json({
         match: true,
@@ -211,19 +240,18 @@ exports.scanShop = async (req, res) => {
           matchedVariant: bestMatch.matchedVariant,
           ambiguousTop: Boolean(bestMatch.ambiguousTop),
         },
-        topMatches: matches.slice(0, 3).map((m) => ({
-          shop_id: m.shop_id,
-          shop_name: m.shop_name,
-          image_url: m.image_url,
-          score: m.score,
-          confidence: m.confidence,
-          rank: m.rank,
-        })),
+        topMatches: alternatives.map(toClientMatch),
         processingTime,
       });
     } else {
       // No confident match — return top candidates if any
       const hasLowConfidence = matches.length > 0 && matches[0].score >= 0.45;
+      const top = matches[0] || null;
+      const lowConfidenceCandidates = top
+        ? matches
+            .filter((m) => m !== top && Number.isFinite(m.score) && top.score - m.score <= 0.04 && m.score >= 0.65)
+            .slice(0, 3)
+        : [];
 
       res.json({
         match: false,
@@ -232,12 +260,9 @@ exports.scanShop = async (req, res) => {
           ? "No strong match found, but here are possible candidates"
           : "No matching shop found",
         topMatches: hasLowConfidence
-          ? matches.slice(0, 3).map((m) => ({
-              shop_id: m.shop_id,
-              shop_name: m.shop_name,
-              image_url: m.image_url,
-              score: m.score,
-              rank: m.rank,
+          ? lowConfidenceCandidates.map((m, idx) => ({
+              ...toClientMatch(m),
+              rank: idx + 1,
             }))
           : [],
         processingTime,
