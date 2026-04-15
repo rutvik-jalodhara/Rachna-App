@@ -8,11 +8,14 @@ export default function MapActionSheet({
   title,
   titleLoading = false,
   locationMatchHint,
+  isShopSelection = false,
   distanceLabel,
   etaLabel,
   actionsDisabled = false,
   onClose,
   onAddShop,
+  onEditShop,
+  onDeleteShop,
   onDirections,
   onStartNavigation,
 }) {
@@ -58,14 +61,35 @@ export default function MapActionSheet({
           {distanceLabel && <p className="map-action-sheet__distance">{distanceLabel}</p>}
           {etaLabel && <p className="map-action-sheet__eta">{etaLabel}</p>}
           <div className="map-action-sheet__actions map-action-sheet__actions--minimal">
-            <button
-              type="button"
-              className="map-action-sheet__btn map-action-sheet__btn--secondary"
-              onClick={onAddShop}
-              disabled={disableActions}
-            >
-              Add shop here
-            </button>
+            {isShopSelection ? (
+              <div className="map-action-sheet__nav-row">
+                <button
+                  type="button"
+                  className="map-action-sheet__btn map-action-sheet__btn--secondary"
+                  onClick={onEditShop}
+                  disabled={disableActions}
+                >
+                  Edit details
+                </button>
+                <button
+                  type="button"
+                  className="map-action-sheet__btn map-action-sheet__btn--danger"
+                  onClick={onDeleteShop}
+                  disabled={disableActions}
+                >
+                  Delete shop
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="map-action-sheet__btn map-action-sheet__btn--secondary"
+                onClick={onAddShop}
+                disabled={disableActions}
+              >
+                Add shop here
+              </button>
+            )}
             <div className="map-action-sheet__nav-row">
               <button
                 type="button"

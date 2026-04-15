@@ -105,6 +105,42 @@ exports.getShopById = async (req, res) => {
 };
 
 // ───────────────────────────────────────────────
+// PUT /api/shops/:id
+// Update editable shop details (text/category/location)
+// ───────────────────────────────────────────────
+exports.updateShop = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { shop_name, description, sales_details, category, notes, latitude, longitude } = req.body;
+
+    const shop = await Shop.findById(id);
+    if (!shop) {
+      return res.status(404).json({ error: "Shop not found" });
+    }
+
+    if (shop_name !== undefined) {
+      const name = String(shop_name || "").trim();
+      if (!name) return res.status(400).json({ error: "Shop name is required" });
+      shop.shop_name = name;
+    }
+    if (description !== undefined) shop.description = description || "";
+    if (sales_details !== undefined) shop.sales_details = sales_details || "";
+    if (category !== undefined) shop.category = category || "General";
+    if (notes !== undefined) shop.notes = notes || "";
+    if (latitude !== undefined) shop.latitude = latitude === null || latitude === "" ? null : parseFloat(latitude);
+    if (longitude !== undefined) shop.longitude = longitude === null || longitude === "" ? null : parseFloat(longitude);
+
+    await shop.save();
+    const response = shop.toObject();
+    delete response.embeddings;
+    res.json(response);
+  } catch (err) {
+    console.error("[SHOP] Update error:", err);
+    res.status(500).json({ error: err.message || "Failed to update shop" });
+  }
+};
+
+// ───────────────────────────────────────────────
 // DELETE /api/shops/:id
 // Delete shop + cleanup Cloudinary image
 // ───────────────────────────────────────────────

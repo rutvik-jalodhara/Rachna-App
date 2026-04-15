@@ -71,6 +71,14 @@ export async function deleteShop(id) {
 }
 
 /**
+ * Update existing shop fields.
+ */
+export async function updateShop(id, payload) {
+  const { data } = await api.put(`/api/shops/${id}`, payload);
+  return data;
+}
+
+/**
  * Scan an image to find matching shop.
  * @param {File|Blob} imageFile - Image to scan
  * @param {function} onProgress - Upload progress callback

@@ -10,6 +10,7 @@ import {
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import L from "leaflet";
 import AddShopModal from "./AddShopModal";
+import EditShopModal from "./EditShopModal";
 import ScanModal from "./ScanModal";
 import ShopDetailModal from "./ShopDetailModal";
 import MapSearchBar from "./MapSearchBar";
@@ -17,7 +18,7 @@ import MapActionSheet from "./MapActionSheet";
 import MapInteractionLayer from "./MapInteractionLayer";
 import MapFlyTo from "./MapFlyTo";
 import { useToast } from "./Toast";
-import { fetchShops, addShop, deleteShop as deleteShopApi } from "../hooks/useApi";
+import { fetchShops, addShop, updateShop as updateShopApi, deleteShop as deleteShopApi } from "../hooks/useApi";
 import { quickReverseLabel, resolvePlaceAtLocation, resolveMapTapLabel } from "../utils/geocoding";
 import { haversineMeters, formatDistance, formatApproxDriveEta, googleMapsDirectionsUrl } from "../utils/geoDistance";
 import { useUserLocation } from "../hooks/useUserLocation";
@@ -210,6 +211,8 @@ function Map() {
   const [scanModalOpen, setScanModalOpen] = useState(false);
   const [detailShop, setDetailShop] = useState(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingShop, setEditingShop] = useState(null);
 
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [detectedName, setDetectedName] = useState("");
@@ -266,6 +269,17 @@ function Map() {
         console.error("Delete error:", err);
         showToast("Failed to delete on server", "error");
       }
+    },
+    [showToast]
+  );
+
+  const handleUpdateShop = useCallback(
+    async (id, payload) => {
+      const updated = await updateShopApi(id, payload);
+      setShops((prev) => prev.map((s) => (s._id === id ? { ...s, ...updated } : s)));
+      setSelectionShop((prev) => (prev && prev._id === id ? { ...prev, ...updated } : prev));
+      showToast("Shop details updated", "success");
+      return updated;
     },
     [showToast]
   );
@@ -407,6 +421,23 @@ function Map() {
     setAddModalOpen(true);
     setSheetOpen(false);
   }, [selectionShop, selectionPoint]);
+
+  const openEditShopFromSelection = useCallback(() => {
+    if (!selectionShop) return;
+    setEditingShop(selectionShop);
+    setEditModalOpen(true);
+    setSheetOpen(false);
+  }, [selectionShop]);
+
+  const deleteShopFromSelection = useCallback(async () => {
+    if (!selectionShop?._id) return;
+    const ok = window.confirm(`Delete "${selectionShop.shop_name}"? This cannot be undone.`);
+    if (!ok) return;
+    const id = selectionShop._id;
+    setSheetOpen(false);
+    setSelectionShop(null);
+    await handleDeleteShop(id);
+  }, [selectionShop, handleDeleteShop]);
 
   const handleUserMarkerTap = useCallback(async () => {
     if (!userCoords) return;
@@ -587,11 +618,14 @@ function Map() {
         title={sheetTitle}
         titleLoading={sheetTitleLoading}
         locationMatchHint={sheetLocationMatchHint}
+        isShopSelection={Boolean(selectionShop)}
         distanceLabel={sheetDistanceLabel}
         etaLabel={sheetEtaLabel}
         actionsDisabled={sheetTitleLoading}
         onClose={clearMapSelection}
         onAddShop={openAddShopAtSelection}
+        onEditShop={openEditShopFromSelection}
+        onDeleteShop={deleteShopFromSelection}
         onDirections={() => {
           if (sheetTitleLoading || directionsLat == null || directionsLng == null) return;
           window.open(googleMapsDirectionsUrl(directionsLat, directionsLng), "_blank", "noopener,noreferrer");
@@ -611,6 +645,21 @@ function Map() {
         onSubmit={handleAddShop}
         initialName={detectedName}
         location={selectedLocation}
+      />
+
+      <EditShopModal
+        isOpen={editModalOpen}
+        shop={editingShop}
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditingShop(null);
+        }}
+        onSubmit={async (payload) => {
+          if (!editingShop?._id) return;
+          await handleUpdateShop(editingShop._id, payload);
+          setEditModalOpen(false);
+          setEditingShop(null);
+        }}
       />
 
       <ScanModal
