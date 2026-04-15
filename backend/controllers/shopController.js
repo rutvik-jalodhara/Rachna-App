@@ -22,27 +22,6 @@ exports.addShop = async (req, res) => {
       return res.status(400).json({ error: "Shop name is required" });
     }
 
-    // Check for duplicates (same name + nearby location)
-    if (latitude && longitude) {
-      const existing = await Shop.findOne({
-        shop_name: { $regex: new RegExp(`^${shop_name.trim()}$`, "i") },
-        latitude: {
-          $gte: parseFloat(latitude) - 0.001,
-          $lte: parseFloat(latitude) + 0.001,
-        },
-        longitude: {
-          $gte: parseFloat(longitude) - 0.001,
-          $lte: parseFloat(longitude) + 0.001,
-        },
-      });
-      if (existing) {
-        return res.status(409).json({
-          error: "A shop with this name already exists at this location",
-          existing_shop: existing,
-        });
-      }
-    }
-
     // Prepare shop data
     const shopData = {
       shop_name: shop_name.trim(),

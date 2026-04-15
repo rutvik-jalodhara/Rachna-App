@@ -249,11 +249,7 @@ function Map() {
         );
       } catch (err) {
         const msg = err.response?.data?.error || err.message;
-        if (err.response?.status === 409) {
-          showToast("This shop already exists at this location", "warning");
-        } else {
-          showToast(msg || "Failed to save shop", "error");
-        }
+        showToast(msg || "Failed to save shop", "error");
         throw err;
       }
     },
