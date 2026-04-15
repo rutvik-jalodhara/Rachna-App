@@ -70,7 +70,7 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
 
       if (result.match) {
         showToast(
-          `Match found: ${result.bestMatch.shop_name} (${Math.round(result.bestMatch.score * 100)}%)`,
+          `Match found: ${result.bestMatch.shop_name} (${(result.bestMatch.score * 100).toFixed(1)}%)`,
           "success"
         );
       }
@@ -245,6 +245,12 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
                   {scanResult.confidence === "high" ? "🎯 Strong Match" : "🔍 Possible Match"}
                 </div>
 
+                {scanResult.bestMatch?.ambiguousTop && (
+                  <p className="scan-substatus" style={{ textAlign: "center", margin: "0 0 8px" }}>
+                    Several shops scored very similarly — confirm the correct one if needed.
+                  </p>
+                )}
+
                 {/* Best Match */}
                 <div
                   className="match-shop-card"
@@ -270,10 +276,10 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
                       <div className="score-bar">
                         <div
                           className="score-fill"
-                          style={{ width: `${Math.round(scanResult.bestMatch.score * 100)}%` }}
+                          style={{ width: `${Math.min(100, scanResult.bestMatch.score * 100)}%` }}
                         />
                       </div>
-                      <span>{Math.round(scanResult.bestMatch.score * 100)}% match</span>
+                      <span>{(scanResult.bestMatch.score * 100).toFixed(1)}% match</span>
                     </div>
                     {shopLatLng(scanResult.bestMatch) && bestMatchNavLabels.distance && (
                       <p className="scan-match-distance">
@@ -338,7 +344,7 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
                         )}
                         <span className="candidate-name">{m.shop_name}</span>
                         <span className="candidate-score">
-                          {Math.round(m.score * 100)}%
+                          {(m.score * 100).toFixed(1)}%
                         </span>
                       </div>
                     ))}
@@ -388,7 +394,7 @@ export default function ScanModal({ isOpen, onClose, onMatchFound, userCoords = 
                           )}
                           <span className="candidate-name">{m.shop_name}</span>
                           <span className="candidate-score">
-                            {Math.round(m.score * 100)}%
+                            {(m.score * 100).toFixed(1)}%
                           </span>
                         </div>
                       ))}

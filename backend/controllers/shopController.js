@@ -201,9 +201,15 @@ exports.scanShop = async (req, res) => {
         match: true,
         confidence: bestMatch.confidence,
         bestMatch: {
-          ...fullShop,
+          ...(fullShop || {
+            _id: bestMatch.shop_id,
+            shop_name: bestMatch.shop_name,
+            image_url: bestMatch.image_url,
+            category: bestMatch.category,
+          }),
           score: bestMatch.score,
           matchedVariant: bestMatch.matchedVariant,
+          ambiguousTop: Boolean(bestMatch.ambiguousTop),
         },
         topMatches: matches.slice(0, 3).map((m) => ({
           shop_id: m.shop_id,

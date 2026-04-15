@@ -227,8 +227,12 @@ function findBestMatches(queryEmbedding, shops) {
     });
   }
 
-  // Sort by score descending
-  scored.sort((a, b) => b.score - a.score);
+  // Sort by score descending; stable tie-break so identical scores have deterministic order
+  scored.sort((a, b) => {
+    const d = b.score - a.score;
+    if (d !== 0) return d;
+    return String(a.shop_id).localeCompare(String(b.shop_id));
+  });
 
   // Take top 5 for analysis
   const top5 = scored.slice(0, 5);
@@ -242,17 +246,30 @@ function findBestMatches(queryEmbedding, shops) {
   const secondScore = top5.length > 1 ? top5[1].score : 0;
   const gap = topScore - secondScore;
 
-  // Calculate confidence level
+  /**
+   * Important: cosine similarity can be ~1.0 for the same/near-duplicate image even when
+   * several shops score equally high (e.g. similar thumbnails or embedding noise). The old
+   * logic required a large gap vs #2, so "100%" + zero gap became "low" and bestMatch was null
+   * — showing "No Strong Match" while listing 100% candidates. If top similarity is very high,
+   * we treat it as a strong match anyway and pick rank 1 (deterministic tie-break above).
+   */
+  const NEAR_DUPLICATE_TOP = 0.88;
+
   let confidence;
-  if (topScore >= 0.85 && gap >= 0.10) {
-    confidence = "high"; // Very strong match, clear winner
-  } else if (topScore >= 0.70 && gap >= 0.05) {
-    confidence = "medium"; // Good match but not as definitive
+  if (topScore >= 0.85 && gap >= 0.1) {
+    confidence = "high"; // Clear winner
+  } else if (topScore >= NEAR_DUPLICATE_TOP) {
+    confidence = "high"; // Same/near-duplicate image — score alone is enough
+  } else if (topScore >= 0.7 && gap >= 0.05) {
+    confidence = "medium";
   } else if (topScore >= 0.55) {
-    confidence = "low"; // Possible match, user should verify
+    confidence = "low";
   } else {
-    confidence = "none"; // No meaningful match
+    confidence = "none";
   }
+
+  const ambiguousTop =
+    top5.length > 1 && gap < 0.03 && topScore >= NEAR_DUPLICATE_TOP;
 
   // Add confidence to each match
   const matches = top5.map((m, idx) => ({
@@ -261,10 +278,10 @@ function findBestMatches(queryEmbedding, shops) {
     rank: idx + 1,
   }));
 
-  // Determine best match based on confidence
+  // Determine best match: high/medium always; never leave null when similarity is near-duplicate
   let bestMatch = null;
   if (confidence === "high" || confidence === "medium") {
-    bestMatch = matches[0];
+    bestMatch = { ...matches[0], ambiguousTop };
   }
 
   // Log for debugging
