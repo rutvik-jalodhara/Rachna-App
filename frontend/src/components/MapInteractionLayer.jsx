@@ -13,7 +13,7 @@ function isOverMapChrome(target) {
   return Boolean(
     target.closest(".leaflet-control") ||
       target.closest(".leaflet-bar") ||
-      target.closest(".google-locate-btn") ||
+      target.closest(".leaflet-control-locate") ||
       target.closest(".scan-fab") ||
       target.closest(".map-search-bar-wrap") ||
       target.closest(".map-search-outer") ||

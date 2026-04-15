@@ -54,18 +54,15 @@ function LiveUserMarker({ userCoords, onUserMarkerTap }) {
 // ───────────────────────────────────────────
 
 function LocationControls({ userCoords, lastFixAt }) {
-  const locateRef = useRef(null);
-
   const map = useMap();
+  const flyToUserRef = useRef(null);
+  const controlRef = useRef(null);
+
   useMapEvents({
     locationfound(e) {
       map.flyTo(e.latlng, Math.max(map.getZoom(), 15), { duration: 0.55 });
     },
   });
-
-  useEffect(() => {
-    if (locateRef.current) L.DomEvent.disableClickPropagation(locateRef.current);
-  }, []);
 
   const flyToUser = useCallback(() => {
     const hasCoords = userCoords && Number.isFinite(userCoords.lat) && Number.isFinite(userCoords.lng);
@@ -77,28 +74,52 @@ function LocationControls({ userCoords, lastFixAt }) {
     map.locate({ setView: true, maxZoom: 16, enableHighAccuracy: true });
   }, [map, userCoords, lastFixAt]);
 
-  return (
-    <button
-      ref={locateRef}
-      className="google-locate-btn"
-      type="button"
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        flyToUser();
-      }}
-      title="Your location"
-    >
-      <svg
-        focusable="false"
-        viewBox="0 0 24 24"
-        style={{ width: "24px", height: "24px", fill: "rgba(232, 234, 237, 0.9)" }}
-        aria-hidden
-      >
-        <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" />
-      </svg>
-    </button>
-  );
+  useEffect(() => {
+    flyToUserRef.current = flyToUser;
+  }, [flyToUser]);
+
+  useEffect(() => {
+    if (controlRef.current) return;
+
+    const LocateControl = L.Control.extend({
+      options: { position: "bottomright" },
+      onAdd() {
+        const container = L.DomUtil.create("div", "leaflet-control leaflet-bar leaflet-control-locate");
+        const btn = L.DomUtil.create("button", "leaflet-control-locate__btn", container);
+        btn.type = "button";
+        btn.title = "Your location";
+        btn.setAttribute("aria-label", "Your location");
+        btn.innerHTML = `
+          <svg focusable="false" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"></path>
+          </svg>
+        `;
+
+        L.DomEvent.disableClickPropagation(container);
+        L.DomEvent.disableScrollPropagation(container);
+        L.DomEvent.on(btn, "click", (e) => {
+          L.DomEvent.stopPropagation(e);
+          L.DomEvent.preventDefault(e);
+          flyToUserRef.current?.();
+        });
+
+        return container;
+      },
+    });
+
+    controlRef.current = new LocateControl();
+    controlRef.current.addTo(map);
+
+    return () => {
+      try {
+        controlRef.current?.remove();
+      } finally {
+        controlRef.current = null;
+      }
+    };
+  }, [map]);
+
+  return null;
 }
 
 // ───────────────────────────────────────────

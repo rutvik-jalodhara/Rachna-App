@@ -50,7 +50,7 @@
 
   /* Map chrome: body already pads safe-area-bottom — gutter from map inner edge */
   --map-ui-bottom: var(--space-4);
-  --map-zoom-stack-height: 76px;
+  --map-zoom-stack-height: 92px;
   --map-locate-above-zoom-gap: var(--space-3);
 
   /* Map search (dark glass — matches header + satellite map) */
@@ -161,10 +161,15 @@ body {
 .map-root .leaflet-bottom.leaflet-right {
   bottom: var(--map-ui-bottom) !important;
   right: max(10px, env(safe-area-inset-right, 0px)) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  gap: 0 !important; /* merged control group */
 }
 
 .map-root .leaflet-bottom.leaflet-right .leaflet-control {
   margin-bottom: 0 !important;
+  margin-top: 0 !important;
 }
 
 /* ───────────────────────────────────────────
@@ -196,6 +201,48 @@ body {
   font-size: 18px;
   font-weight: 700;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  text-indent: 0 !important;
+}
+
+.map-root .leaflet-control-locate.leaflet-bar {
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-bottom: none !important;
+}
+
+.map-root .leaflet-control-zoom.leaflet-bar {
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.map-root .leaflet-control-locate__btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.map-root .leaflet-control-locate__btn svg {
+  width: 24px;
+  height: 24px;
+  fill: rgba(232, 234, 237, 0.92);
+}
+
+.map-root .leaflet-control-locate__btn:hover {
+  background: rgba(108, 92, 231, 0.18);
+}
+
+.map-root .leaflet-control-locate__btn:active {
+  background: rgba(108, 92, 231, 0.28);
 }
 
 .map-root .leaflet-bar a:last-child {
@@ -216,6 +263,35 @@ body {
   cursor: not-allowed !important;
 }
 
+/* Force consistent + / − rendering across fonts/devices */
+.map-root .leaflet-control-zoom a.leaflet-control-zoom-in,
+.map-root .leaflet-control-zoom a.leaflet-control-zoom-out {
+  color: transparent !important; /* hide Leaflet text glyph */
+  position: relative;
+}
+
+.map-root .leaflet-control-zoom a.leaflet-control-zoom-in::before,
+.map-root .leaflet-control-zoom a.leaflet-control-zoom-out::before {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(232, 234, 237, 0.92);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.map-root .leaflet-control-zoom a.leaflet-control-zoom-in::before {
+  content: "+";
+}
+
+.map-root .leaflet-control-zoom a.leaflet-control-zoom-out::before {
+  content: "−";
+}
+
 .map-root .leaflet-control-zoom {
   margin-bottom: 0 !important;
 }
@@ -229,7 +305,7 @@ body {
   backdrop-filter: blur(10px);
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
   padding: 4px 8px !important;
-  margin: 0 0 8px 0 !important;
+  margin: 0 !important;
 }
 
 .map-root .leaflet-control-attribution a {
@@ -2344,31 +2420,7 @@ img {
   box-shadow: 0 0 0 4px rgba(108, 92, 231, 0.95);
 }
 
-.google-locate-btn {
-  position: absolute;
-  bottom: calc(
-    var(--map-ui-bottom) + var(--map-zoom-stack-height) + var(--map-locate-above-zoom-gap)
-  );
-  right: max(var(--space-2), env(safe-area-inset-right, 0px));
-  z-index: var(--z-map-ui);
-  background: rgba(22, 25, 32, 0.92);
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
-  transition: background 0.2s;
-}
-
-.google-locate-btn:hover {
-  background: rgba(108, 92, 231, 0.18);
-}
+/* Locate button is now a Leaflet control; legacy absolute styles removed. */
 
 /* ─── Loader Overlay ─── */
 .loader-overlay {
