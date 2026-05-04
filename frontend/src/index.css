@@ -2043,6 +2043,59 @@ img {
   -webkit-overflow-scrolling: touch;
 }
 
+.map-action-sheet__hero-btn {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: var(--space-1) 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.map-action-sheet__hero-img {
+  width: 100%;
+  height: 170px;
+  object-fit: cover;
+  display: block;
+}
+
+.map-action-sheet__image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  background: rgba(0, 0, 0, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.map-action-sheet__image-lightbox-img {
+  max-width: min(96vw, 920px);
+  max-height: 88vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.5);
+}
+
+.map-action-sheet__image-lightbox-close {
+  position: absolute;
+  top: max(var(--space-4), env(safe-area-inset-top, 0px));
+  right: max(var(--space-4), env(safe-area-inset-right, 0px));
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
+
 .map-action-sheet__title {
   margin: var(--space-1) 2.5rem var(--space-2) 0;
   font-size: 1.15rem;

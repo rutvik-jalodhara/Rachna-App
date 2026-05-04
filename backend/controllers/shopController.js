@@ -130,7 +130,34 @@ exports.updateShop = async (req, res) => {
     if (latitude !== undefined) shop.latitude = latitude === null || latitude === "" ? null : parseFloat(latitude);
     if (longitude !== undefined) shop.longitude = longitude === null || longitude === "" ? null : parseFloat(longitude);
 
+    // Optional image replacement
+    if (req.file) {
+      console.log(`[SHOP] Updating image for "${shop.shop_name}" (${(req.file.size / 1024).toFixed(0)} KB)`);
+      const { url, public_id } = await uploadImage(req.file.buffer);
+
+      const oldPublicId = shop.image_public_id;
+      shop.image_url = url;
+      shop.image_public_id = public_id;
+
+      try {
+        const embeddings = await getMultiScaleEmbeddings(req.file.buffer);
+        shop.embeddings = embeddings;
+      } catch (embErr) {
+        console.error(`[SHOP] Embedding update failed (continuing without): ${embErr.message}`);
+      }
+
+      // Delete old cloudinary image after successful replacement (best-effort)
+      if (oldPublicId && oldPublicId !== public_id) {
+        try {
+          await deleteFromCloudinary(oldPublicId);
+        } catch (delErr) {
+          console.warn(`[SHOP] Old image cleanup failed (${oldPublicId}): ${delErr.message}`);
+        }
+      }
+    }
+
     await shop.save();
+    invalidateCache();
     const response = shop.toObject();
     delete response.embeddings;
     res.json(response);

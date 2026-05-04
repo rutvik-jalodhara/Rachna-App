@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 /**
  * Bottom action panel — minimal actions for any selected map point or shop.
@@ -9,6 +9,8 @@ export default function MapActionSheet({
   titleLoading = false,
   locationMatchHint,
   isShopSelection = false,
+  headerImageUrl,
+  headerImageAlt,
   distanceLabel,
   etaLabel,
   actionsDisabled = false,
@@ -17,11 +19,15 @@ export default function MapActionSheet({
   onEditShop,
   onDeleteShop,
   onDirections,
-  onStartNavigation,
 }) {
   if (!isOpen) return null;
 
   const disableActions = actionsDisabled || titleLoading;
+  const [imageOpen, setImageOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) setImageOpen(false);
+  }, [isOpen]);
 
   return (
     <div className="map-action-sheet-backdrop" onClick={onClose} role="presentation">
@@ -38,6 +44,21 @@ export default function MapActionSheet({
           ✕
         </button>
         <div className="map-action-sheet__scroll">
+          {isShopSelection && headerImageUrl && (
+            <button
+              type="button"
+              className="map-action-sheet__hero-btn"
+              onClick={() => setImageOpen(true)}
+              aria-label="Open shop image"
+            >
+              <img
+                src={headerImageUrl}
+                alt={headerImageAlt || title || "Shop image"}
+                className="map-action-sheet__hero-img"
+              />
+            </button>
+          )}
+
           {titleLoading ? (
             <div className="map-action-sheet__title-loading" id="map-action-sheet-title">
               <span className="map-action-sheet__title-spinner spinner-small" aria-hidden />
@@ -102,21 +123,35 @@ export default function MapActionSheet({
                 </svg>
                 Get directions
               </button>
-              <button
-                type="button"
-                className="map-action-sheet__btn map-action-sheet__btn--nav"
-                onClick={onStartNavigation}
-                disabled={disableActions}
-              >
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden>
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-                Start navigation
-              </button>
             </div>
           </div>
         </div>
       </div>
+
+      {imageOpen && headerImageUrl && (
+        <div
+          className="map-action-sheet__image-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Shop image preview"
+          onClick={() => setImageOpen(false)}
+        >
+          <button
+            type="button"
+            className="map-action-sheet__image-lightbox-close"
+            onClick={() => setImageOpen(false)}
+            aria-label="Close image preview"
+          >
+            ✕
+          </button>
+          <img
+            src={headerImageUrl}
+            alt={headerImageAlt || title || "Shop image"}
+            className="map-action-sheet__image-lightbox-img"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }

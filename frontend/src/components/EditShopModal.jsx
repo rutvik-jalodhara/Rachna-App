@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import ImageUploader from "./ImageUploader";
 
 const CATEGORIES = [
   "General",
@@ -23,6 +24,8 @@ export default function EditShopModal({ isOpen, shop, onClose, onSubmit }) {
     notes: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
 
   useEffect(() => {
     if (!isOpen || !shop) return;
@@ -33,6 +36,8 @@ export default function EditShopModal({ isOpen, shop, onClose, onSubmit }) {
       category: shop.category || "General",
       notes: shop.notes || "",
     });
+    setImageFile(null);
+    setPreviewUrl(shop.image_url || null);
   }, [isOpen, shop]);
 
   if (!isOpen || !shop) return null;
@@ -52,7 +57,7 @@ export default function EditShopModal({ isOpen, shop, onClose, onSubmit }) {
         shop_name: formData.shop_name.trim(),
         latitude: shop.latitude,
         longitude: shop.longitude,
-      });
+      }, imageFile);
       onClose?.();
     } finally {
       setIsSubmitting(false);
@@ -70,6 +75,22 @@ export default function EditShopModal({ isOpen, shop, onClose, onSubmit }) {
         </div>
 
         <form className="modal-content modal-content--form" onSubmit={handleSubmit}>
+          <div className="image-upload-section">
+            <label className="section-label">Shop Photo</label>
+            <ImageUploader
+              onImageSelect={(file, preview) => {
+                setImageFile(file);
+                setPreviewUrl(preview);
+              }}
+              onImageClear={() => {
+                setImageFile(null);
+                setPreviewUrl(null);
+              }}
+              previewUrl={previewUrl}
+              disabled={isSubmitting}
+            />
+          </div>
+
           <div className="input-group">
             <label>Shop Name *</label>
             <input

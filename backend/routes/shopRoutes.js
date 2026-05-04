@@ -19,8 +19,8 @@ router.get("/", getShops);
 // Get single shop by ID
 router.get("/:id", getShopById);
 
-// Update shop details
-router.put("/:id", updateShop);
+// Update shop details (with optional image upload)
+router.put("/:id", upload.single("image"), updateShop);
 
 // Delete shop
 router.delete("/:id", deleteShop);

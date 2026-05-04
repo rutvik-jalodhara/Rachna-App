@@ -274,8 +274,8 @@ function Map() {
   );
 
   const handleUpdateShop = useCallback(
-    async (id, payload) => {
-      const updated = await updateShopApi(id, payload);
+    async (id, payload, imageFile = null) => {
+      const updated = await updateShopApi(id, payload, imageFile);
       setShops((prev) => prev.map((s) => (s._id === id ? { ...s, ...updated } : s)));
       setSelectionShop((prev) => (prev && prev._id === id ? { ...prev, ...updated } : prev));
       showToast("Shop details updated", "success");
@@ -619,6 +619,8 @@ function Map() {
         titleLoading={sheetTitleLoading}
         locationMatchHint={sheetLocationMatchHint}
         isShopSelection={Boolean(selectionShop)}
+        headerImageUrl={selectionShop?.image_url || ""}
+        headerImageAlt={selectionShop?.shop_name || "Shop image"}
         distanceLabel={sheetDistanceLabel}
         etaLabel={sheetEtaLabel}
         actionsDisabled={sheetTitleLoading}
@@ -629,10 +631,6 @@ function Map() {
         onDirections={() => {
           if (sheetTitleLoading || directionsLat == null || directionsLng == null) return;
           window.open(googleMapsDirectionsUrl(directionsLat, directionsLng), "_blank", "noopener,noreferrer");
-        }}
-        onStartNavigation={() => {
-          if (sheetTitleLoading || directionsLat == null || directionsLng == null) return;
-          window.open(googleMapsDirectionsUrl(directionsLat, directionsLng, { driving: true }), "_blank", "noopener,noreferrer");
         }}
       />
 
@@ -654,9 +652,9 @@ function Map() {
           setEditModalOpen(false);
           setEditingShop(null);
         }}
-        onSubmit={async (payload) => {
+        onSubmit={async (payload, imageFile) => {
           if (!editingShop?._id) return;
-          await handleUpdateShop(editingShop._id, payload);
+          await handleUpdateShop(editingShop._id, payload, imageFile);
           setEditModalOpen(false);
           setEditingShop(null);
         }}

@@ -73,8 +73,26 @@ export async function deleteShop(id) {
 /**
  * Update existing shop fields.
  */
-export async function updateShop(id, payload) {
-  const { data } = await api.put(`/api/shops/${id}`, payload);
+export async function updateShop(id, payload, imageFile = null, onProgress = null) {
+  const formData = new FormData();
+  Object.entries(payload || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) {
+      formData.append(key, value);
+    }
+  });
+  if (imageFile) {
+    formData.append("image", imageFile, "shop-image.jpg");
+  }
+
+  const { data } = await api.put(`/api/shops/${id}`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+    onUploadProgress: (progressEvent) => {
+      if (onProgress && progressEvent.total) {
+        const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        onProgress(percent);
+      }
+    },
+  });
   return data;
 }
 

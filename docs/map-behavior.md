@@ -116,8 +116,7 @@ When a **point** or **shop** is selected:
 - **Distance / ETA** (when location permission allows): straight-line **haversine** distance and a **rough drive ETA** (not traffic-aware routing).
 - **Actions:**
   - Add shop here  
-  - Get directions (opens Google Maps directions URL)  
-  - Start navigation (same with driving mode flag)
+  - Get directions (opens Google Maps directions URL)
 
 Closing the sheet clears selection state.
 
